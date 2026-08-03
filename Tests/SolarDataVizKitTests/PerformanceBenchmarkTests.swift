@@ -94,7 +94,7 @@ final class PerformanceBenchmarkTests: XCTestCase {
         let elapsedMS = (CFAbsoluteTimeGetCurrent() - start) * 1000.0
 
         print("⚡ [Benchmark 1K Scatter Clustering] Merged into \(clusters.count) nodes in \(String(format: "%.2f", elapsedMS)) ms")
-        XCTAssertLessThan(elapsedMS, 100.0)
+        XCTAssertLessThan(elapsedMS, 20.0, "1K scatter clustering must complete under 20ms for smooth 60fps interaction")
     }
 
     // MARK: - 4. Layout Cache Hit Benchmark (10,000 Queries)
