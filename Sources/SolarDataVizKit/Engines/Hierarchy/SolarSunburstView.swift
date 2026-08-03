@@ -11,6 +11,9 @@ public struct SunburstArc<Item: Identifiable & Sendable>: Identifiable, Sendable
     public let outerRadius: CGFloat
     public let label: String
     public let percentage: Double
+    public let groupIndex: Int
+    public let isChild: Bool
+    public let childIndex: Int
 
     public init(
         id: String = UUID().uuidString,
@@ -20,7 +23,10 @@ public struct SunburstArc<Item: Identifiable & Sendable>: Identifiable, Sendable
         innerRadius: CGFloat,
         outerRadius: CGFloat,
         label: String,
-        percentage: Double
+        percentage: Double,
+        groupIndex: Int = 0,
+        isChild: Bool = false,
+        childIndex: Int = 0
     ) {
         self.id = id
         self.item = item
@@ -30,6 +36,9 @@ public struct SunburstArc<Item: Identifiable & Sendable>: Identifiable, Sendable
         self.outerRadius = outerRadius
         self.label = label
         self.percentage = percentage
+        self.groupIndex = groupIndex
+        self.isChild = isChild
+        self.childIndex = childIndex
     }
 }
 
@@ -64,58 +73,12 @@ public struct SolarSunburstView<
 
         GeometryReader { geometry in
             let center = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
-            let maxRadius = min(geometry.size.width, geometry.size.height) / 2 - 16
+            let maxRadius = min(geometry.size.width, geometry.size.height) / 2
             let arcs = computeArcs(center: center, maxRadius: maxRadius)
 
             ZStack {
-                ForEach(Array(arcs.enumerated()), id: \.element.id) { index, arc in
-                    let isSelected = selectedArcID == arc.id
-                    let color = theme.seriesColors[index % theme.seriesColors.count]
-
-                    Path { path in
-                        path.addArc(
-                            center: center,
-                            radius: arc.outerRadius,
-                            startAngle: arc.startAngle,
-                            endAngle: arc.endAngle,
-                            clockwise: false
-                        )
-                        path.addArc(
-                            center: center,
-                            radius: arc.innerRadius,
-                            startAngle: arc.endAngle,
-                            endAngle: arc.startAngle,
-                            clockwise: true
-                        )
-                        path.closeSubpath()
-                    }
-                    .fill(color.opacity(isSelected ? 0.95 : 0.75))
-                    .overlay(
-                        Path { path in
-                            let sweepDeg = abs(arc.endAngle.degrees - arc.startAngle.degrees)
-                            if sweepDeg >= 359.9 {
-                                path.addArc(center: center, radius: arc.outerRadius, startAngle: .degrees(0), endAngle: .degrees(360), clockwise: false)
-                                path.addArc(center: center, radius: arc.innerRadius, startAngle: .degrees(360), endAngle: .degrees(0), clockwise: true)
-                            } else {
-                                path.addArc(center: center, radius: arc.outerRadius, startAngle: arc.startAngle, endAngle: arc.endAngle, clockwise: false)
-                                path.addArc(center: center, radius: arc.innerRadius, startAngle: arc.endAngle, endAngle: arc.startAngle, clockwise: true)
-                                path.closeSubpath()
-                            }
-                        }
-                        .stroke(isSelected ? Color.white : theme.borderColor, lineWidth: isSelected ? 2 : 1)
-                    )
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(arc.label)")
-                    .accessibilityValue("\(String(format: "%.1f", arc.percentage)) percent")
-                    .accessibilityHint("Double tap to highlight segment")
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            selectedArcID = isSelected ? nil : arc.id
-                        }
-                        Task { @MainActor in
-                            SolarVizHaptics.shared.playSelection()
-                        }
-                    }
+                ForEach(arcs) { arc in
+                    arcView(arc: arc, center: center, theme: theme)
                 }
 
                 // Center Label
@@ -151,6 +114,60 @@ public struct SolarSunburstView<
         .accessibilityValue("\(binding.sortedGroupKeys.count) parent categories, \(binding.data.count) total child items")
     }
 
+    @ViewBuilder
+    private func arcView(arc: SunburstArc<Item>, center: CGPoint, theme: SolarVizTheme) -> some View {
+        let isSelected = selectedArcID == arc.id
+        let baseColor = theme.seriesColors[arc.groupIndex % max(theme.seriesColors.count, 1)]
+        let color = arc.isChild ? baseColor.opacity(0.60 + 0.12 * Double(arc.childIndex % 3)) : baseColor
+
+        ZStack {
+            Path { path in
+                path.addArc(
+                    center: center,
+                    radius: arc.outerRadius,
+                    startAngle: arc.startAngle,
+                    endAngle: arc.endAngle,
+                    clockwise: false
+                )
+                path.addArc(
+                    center: center,
+                    radius: arc.innerRadius,
+                    startAngle: arc.endAngle,
+                    endAngle: arc.startAngle,
+                    clockwise: true
+                )
+                path.closeSubpath()
+            }
+            .fill(color.opacity(isSelected ? 0.95 : (arc.isChild ? 0.80 : 0.95)))
+            .overlay(
+                Path { path in
+                    let sweepDeg = abs(arc.endAngle.degrees - arc.startAngle.degrees)
+                    if sweepDeg >= 359.9 {
+                        path.addArc(center: center, radius: arc.outerRadius, startAngle: .degrees(0), endAngle: .degrees(360), clockwise: false)
+                        path.addArc(center: center, radius: arc.innerRadius, startAngle: .degrees(360), endAngle: .degrees(0), clockwise: true)
+                    } else {
+                        path.addArc(center: center, radius: arc.outerRadius, startAngle: arc.startAngle, endAngle: arc.endAngle, clockwise: false)
+                        path.addArc(center: center, radius: arc.innerRadius, startAngle: arc.endAngle, endAngle: arc.startAngle, clockwise: true)
+                        path.closeSubpath()
+                    }
+                }
+                .stroke(isSelected ? Color.white : theme.borderColor, lineWidth: isSelected ? 2 : 1)
+            )
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(arc.label)")
+        .accessibilityValue("\(String(format: "%.1f", arc.percentage)) percent")
+        .accessibilityHint("Double tap to highlight segment")
+        .onTapGesture {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                selectedArcID = isSelected ? nil : arc.id
+            }
+            Task { @MainActor in
+                SolarVizHaptics.shared.playSelection()
+            }
+        }
+    }
+
     /// 2-Level Hierarchical Sunburst Ring Algorithm (Parent Group Ring + Child Sub-item Ring)
     private func computeArcs(center: CGPoint, maxRadius: CGFloat) -> [SunburstArc<Item>] {
         guard !binding.data.isEmpty, maxRadius > 0 else { return [] }
@@ -179,7 +196,7 @@ public struct SolarSunburstView<
             let groupEndAngle = currentAngle + groupSweep
             let groupPct = (groupSum / totalValue) * 100.0
 
-            // 1. Parent Level Arc (Inner Ring)
+            // 1. Parent Level Arc (Inner Ring) - Full Color Saturation
             if let firstItem = groupItems.first {
                 arcs.append(SunburstArc(
                     id: "parent_\(groupIndex)_\(groupName)",
@@ -189,13 +206,16 @@ public struct SolarSunburstView<
                     innerRadius: innerRingR0,
                     outerRadius: innerRingR1,
                     label: groupName,
-                    percentage: groupPct
+                    percentage: groupPct,
+                    groupIndex: groupIndex,
+                    isChild: false,
+                    childIndex: 0
                 ))
             }
 
-            // 2. Child Level Arcs (Outer Ring inside Parent angular span)
+            // 2. Child Level Arcs (Outer Ring) - Inherits Parent Category Color Family
             var childAngle = groupStartAngle
-            for (_, item) in groupItems.enumerated() {
+            for (itemIndex, item) in groupItems.enumerated() {
                 let val = max(0.0, Double(binding.extractY(from: item)))
                 let itemSweep = (val / groupSum) * groupSweep
                 let itemStartA = Angle(degrees: childAngle)
@@ -213,7 +233,10 @@ public struct SolarSunburstView<
                     innerRadius: outerRingR0,
                     outerRadius: outerRingR1,
                     label: itemLabel,
-                    percentage: itemPct
+                    percentage: itemPct,
+                    groupIndex: groupIndex,
+                    isChild: true,
+                    childIndex: itemIndex
                 ))
             }
 

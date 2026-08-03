@@ -13,6 +13,7 @@ import SwiftUI
 /// ```
 public struct DensityHeatmapView: View {
     public let nodes: [ClusterNode]
+    @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
 
     public init(nodes: [ClusterNode]) {
         self.nodes = nodes
@@ -29,9 +30,10 @@ public struct DensityHeatmapView: View {
                     width: node.radius * 5.0,
                     height: node.radius * 5.0
                 )
+                let accent = environmentTheme.accentColor
                 let gradient = Gradient(colors: [
-                    Color.orange.opacity(min(Double(node.count) * 0.3, 0.85)),
-                    Color.orange.opacity(0.0)
+                    accent.opacity(min(Double(node.count) * 0.3, 0.85)),
+                    accent.opacity(0.0)
                 ])
                 let shading = GraphicsContext.Shading.radialGradient(
                     gradient,

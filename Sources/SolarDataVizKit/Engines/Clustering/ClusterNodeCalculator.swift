@@ -85,16 +85,16 @@ public struct ClusterNodeCalculator: Sendable {
             grid[GridKey(x: gx, y: gy), default: []].append(idx)
         }
 
-        var visited = Set<String>()
+        var visited = [Bool](repeating: false, count: points.count)
         var resultNodes: [ClusterNode] = []
 
         for i in 0..<points.count {
             if Task.isCancelled { return [] }
-            let current = points[i]
-            if visited.contains(current.id) { continue }
+            if visited[i] { continue }
 
+            let current = points[i]
             var clusterPoints = [current]
-            visited.insert(current.id)
+            visited[i] = true
 
             let gx = Int(floor(current.point.x / cellSize))
             let gy = Int(floor(current.point.y / cellSize))
@@ -106,13 +106,13 @@ public struct ClusterNodeCalculator: Sendable {
                     guard let candidateIndices = grid[neighborKey] else { continue }
 
                     for jIdx in candidateIndices {
+                        if visited[jIdx] { continue }
                         let neighbor = points[jIdx]
-                        if visited.contains(neighbor.id) { continue }
 
                         let dist = distance(from: current.point, to: neighbor.point)
                         if dist <= thresholdRadius {
                             clusterPoints.append(neighbor)
-                            visited.insert(neighbor.id)
+                            visited[jIdx] = true
                         }
                     }
                 }

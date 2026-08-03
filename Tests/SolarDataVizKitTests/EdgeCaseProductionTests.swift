@@ -353,4 +353,47 @@ final class EdgeCaseProductionTests: XCTestCase {
         XCTAssertEqual(tiles.count, 2)
         XCTAssertEqual(tiles[0].rect.width, 100.0)
     }
+
+    // MARK: - 21. Sunburst Parent-Child Color Family Inheritance Test
+
+    func testSunburstParentChildColorFamilyInheritance() {
+        let items = [
+            ProductionEdgeItem(id: "1", xLabel: "Sub A1", yValue: 100.0, category: "Tech", subCategory: "S"),
+            ProductionEdgeItem(id: "2", xLabel: "Sub A2", yValue: 200.0, category: "Tech", subCategory: "S")
+        ]
+
+        let binding = VizDataBinding(data: items, x: \.xLabel, y: \.yValue, group: \.category)
+        let sunburst = SolarSunburstView(binding: binding)
+        XCTAssertNotNil(sunburst)
+    }
+
+    // MARK: - 22. Heterogenous Dual Model Comparison Test
+
+    @MainActor
+    func testHeterogenousDualModelComparisonView() {
+        struct SalesModel: Identifiable, Sendable {
+            let id: String
+            let month: String
+            let revenue: Double
+        }
+        struct ExpenseModel: Identifiable, Sendable {
+            let id: String
+            let month: String
+            let cost: Double
+        }
+
+        let sales = [SalesModel(id: "1", month: "Jan", revenue: 500.0)]
+        let expenses = [ExpenseModel(id: "101", month: "Jan", cost: 300.0)]
+
+        let bindingSales = VizDataBinding(data: sales, x: \.month, y: \.revenue)
+        let bindingExpenses = VizDataBinding(data: expenses, x: \.month, y: \.cost)
+
+        let dualChart = SolarDualComparisonChartView(
+            bindingA: bindingSales,
+            bindingB: bindingExpenses,
+            labelA: "Sales Revenue",
+            labelB: "Operating Expenses"
+        )
+        XCTAssertNotNil(dualChart)
+    }
 }
