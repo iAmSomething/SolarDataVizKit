@@ -22,6 +22,7 @@ public protocol TreemapLayoutStrategy: Sendable {
     func computeTiles<Item>(
         data: [Item],
         extractY: @Sendable (Item) -> Double,
+        extractID: (@Sendable (Item) -> String)?,
         bounds: CGRect
     ) -> [TreeTile<Item>]
 }
@@ -33,6 +34,7 @@ public struct SquarifiedTreemapStrategy: TreemapLayoutStrategy {
     public func computeTiles<Item>(
         data: [Item],
         extractY: @Sendable (Item) -> Double,
+        extractID: (@Sendable (Item) -> String)? = nil,
         bounds: CGRect
     ) -> [TreeTile<Item>] {
         guard !data.isEmpty, bounds.width > 0, bounds.height > 0 else { return [] }
@@ -49,41 +51,39 @@ public struct SquarifiedTreemapStrategy: TreemapLayoutStrategy {
 
         func worstAspectRatio(row: [(item: Item, val: Double)], sideLength: CGFloat) -> CGFloat {
             guard !row.isEmpty, sideLength > 0 else { return .greatestFiniteMagnitude }
-            let sumVal = row.reduce(0.0) { $0 + $1.val }
-            let rowArea = (sumVal / totalValue) * Double(bounds.width * bounds.height)
-            guard rowArea > 0 else { return .greatestFiniteMagnitude }
+            let rowTotal = row.reduce(0.0) { $0 + $1.val }
+            let rowArea = (rowTotal / totalValue) * Double(bounds.width * bounds.height)
+            let length = Double(sideLength)
+            let rowThickness = rowArea / length
+            guard rowThickness > 0 else { return .greatestFiniteMagnitude }
 
-            let rowThickness = CGFloat(rowArea) / sideLength
-            var maxAR: CGFloat = 0
-
+            var maxAspect: CGFloat = 0
             for elem in row {
                 let elemArea = (elem.val / totalValue) * Double(bounds.width * bounds.height)
-                let length = CGFloat(elemArea) / rowThickness
-                guard length > 0 else { continue }
-                let ar = max(rowThickness / length, length / rowThickness)
-                if ar > maxAR { maxAR = ar }
+                let elemLength = elemArea / rowThickness
+                let aspect = elemLength >= rowThickness ? (elemLength / rowThickness) : (rowThickness / elemLength)
+                if aspect > maxAspect {
+                    maxAspect = aspect
+                }
             }
-            return maxAR
+            return maxAspect
         }
 
         func layoutRow(row: [(item: Item, val: Double)], in rect: inout CGRect) {
-            guard !row.isEmpty else { return }
-            let sumVal = row.reduce(0.0) { $0 + $1.val }
-            guard sumVal > 0 else { return }
-            let rowFraction = sumVal / totalValue
-            let totalBoundsArea = bounds.width * bounds.height
-            let rowArea = CGFloat(rowFraction) * totalBoundsArea
-
+            let rowTotal = row.reduce(0.0) { $0 + $1.val }
+            let rowArea = (rowTotal / totalValue) * Double(bounds.width * bounds.height)
             let isHorizontal = rect.width >= rect.height
             let sideLength = isHorizontal ? rect.height : rect.width
             guard sideLength > 0 else { return }
-            let rowThickness = rowArea / sideLength
+
+            let rowThickness = CGFloat(rowArea) / sideLength
+            guard rowThickness > 0 else { return }
 
             var offset: CGFloat = 0
             for elem in row {
-                let elemFraction = elem.val / sumVal
-                let elemLength = sideLength * CGFloat(elemFraction)
+                let elemFraction = CGFloat(elem.val / rowTotal)
                 let pct = (elem.val / totalValue) * 100.0
+                let elemLength = sideLength * elemFraction
 
                 let tileRect: CGRect
                 if isHorizontal {
@@ -92,7 +92,8 @@ public struct SquarifiedTreemapStrategy: TreemapLayoutStrategy {
                     tileRect = CGRect(x: rect.origin.x + offset, y: rect.origin.y, width: elemLength, height: rowThickness)
                 }
                 offset += elemLength
-                tiles.append(TreeTile(id: "tile_\(tiles.count)", item: elem.item, rect: tileRect, percentage: pct))
+                let tileID = extractID?(elem.item) ?? "tile_\(tiles.count)"
+                tiles.append(TreeTile(id: tileID, item: elem.item, rect: tileRect, percentage: pct))
             }
 
             if isHorizontal {
@@ -138,6 +139,7 @@ public struct SliceAndDiceTreemapStrategy: TreemapLayoutStrategy {
     public func computeTiles<Item>(
         data: [Item],
         extractY: @Sendable (Item) -> Double,
+        extractID: (@Sendable (Item) -> String)? = nil,
         bounds: CGRect
     ) -> [TreeTile<Item>] {
         guard !data.isEmpty, bounds.width > 0, bounds.height > 0 else { return [] }
@@ -163,7 +165,8 @@ public struct SliceAndDiceTreemapStrategy: TreemapLayoutStrategy {
                 tileRect = CGRect(x: bounds.origin.x, y: bounds.origin.y + offset, width: bounds.width, height: length)
                 offset += length
             }
-            tiles.append(TreeTile(id: "tile_\(tiles.count)", item: item, rect: tileRect, percentage: pct))
+            let tileID = extractID?(item) ?? "tile_\(tiles.count)"
+            tiles.append(TreeTile(id: tileID, item: item, rect: tileRect, percentage: pct))
         }
 
         return tiles

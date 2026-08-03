@@ -35,6 +35,8 @@ public struct SolarComparisonChartView<
     @State private var selectedIndex: Int?
     @State private var previousCrossIndex: Int?
 
+    public let initialSelectedIndex: Int?
+
     public init(
         binding: VizDataBinding<Item, XValue, YValue>,
         seriesA: String = "Series A",
@@ -44,6 +46,7 @@ public struct SolarComparisonChartView<
         self.binding = binding
         self.seriesA = seriesA
         self.seriesB = seriesB
+        self.initialSelectedIndex = initialSelectedIndex
         self._selectedIndex = State(initialValue: initialSelectedIndex)
 
         // Cache grouped items once during init to prevent 60Hz main-thread re-grouping on body re-evaluations
@@ -229,6 +232,9 @@ public struct SolarComparisonChartView<
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Comparison Line Chart, \(seriesA) versus \(seriesB)")
         .accessibilityValue("\(itemsA.count) data points. Touch or drag to inspect delta values.")
+        .onChange(of: initialSelectedIndex) { newValue in
+            selectedIndex = newValue
+        }
     }
 
     private func checkIntersectionHaptic(at index: Int) {

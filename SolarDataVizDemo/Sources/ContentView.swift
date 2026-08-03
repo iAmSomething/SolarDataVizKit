@@ -15,6 +15,16 @@ struct SolarDataVizDemoApp: App {
         if let idx = args.firstIndex(of: "--chart-idx"), idx + 1 < args.count {
             return Int(args[idx + 1]) ?? 0
         }
+        if let idx = args.firstIndex(of: "--tab"), idx + 1 < args.count {
+            let name = args[idx + 1].lowercased()
+            switch name {
+            case "comparison": return 0
+            case "clustering": return 4
+            case "treemap": return 7
+            case "sunburst": return 8
+            default: return 0
+            }
+        }
         return 0
     }
 

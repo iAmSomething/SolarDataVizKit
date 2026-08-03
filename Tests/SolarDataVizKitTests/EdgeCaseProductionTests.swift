@@ -656,4 +656,40 @@ final class EdgeCaseProductionTests: XCTestCase {
         XCTAssertEqual(parentVC.view.subviews.count, 0)
         #endif
     }
+
+    // MARK: - 34. Phase 6: SolarComparisonChartView initialSelectedIndex Reactive Property Test
+
+    @MainActor
+    func testPhase6StatefulSelectedIndexParentSync() {
+        let items = (0..<5).map { SolarDefaultDataPoint(xLabel: "M\($0)", value: Double($0 * 10)) }
+        let binding = VizDataBinding(data: items, x: \.xLabel, y: \.value)
+        let chart = SolarComparisonChartView(binding: binding, initialSelectedIndex: 3)
+        XCTAssertEqual(chart.initialSelectedIndex, 3, "initialSelectedIndex must be stored reactively on chart view instance")
+    }
+
+    // MARK: - 35. Phase 6: Treemap Genuine Item ID Preservation Test
+
+    func testPhase6TreemapUniqueTileIDPreservation() {
+        struct ProductTileItem: Identifiable, Sendable {
+            let id: String
+            let val: Double
+        }
+
+        let products = [
+            ProductTileItem(id: "PROD_APPLE", val: 500.0),
+            ProductTileItem(id: "PROD_GOOGLE", val: 300.0)
+        ]
+
+        let strategy = SquarifiedTreemapStrategy()
+        let tiles = strategy.computeTiles(
+            data: products,
+            extractY: { $0.val },
+            extractID: { $0.id },
+            bounds: CGRect(x: 0, y: 0, width: 400, height: 400)
+        )
+
+        XCTAssertEqual(tiles.count, 2)
+        XCTAssertTrue(tiles.contains(where: { $0.id == "PROD_APPLE" }), "TreeTile.id must match genuine item ID instead of artificial tile_0 index")
+        XCTAssertTrue(tiles.contains(where: { $0.id == "PROD_GOOGLE" }), "TreeTile.id must match genuine item ID instead of artificial tile_1 index")
+    }
 }

@@ -120,6 +120,7 @@ public struct SolarTreeMapView<
         return strategy.computeTiles(
             data: binding.data,
             extractY: { Double(localBinding.extractY(from: $0)) },
+            extractID: { String(describing: $0.id) },
             bounds: bounds
         )
     }
