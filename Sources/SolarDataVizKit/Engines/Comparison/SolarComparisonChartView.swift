@@ -84,26 +84,29 @@ public struct SolarComparisonChartView<
                 // Main Chart Canvas
                 ZStack(alignment: .topLeading) {
                     Chart {
-                        // Draw Area Shading Path
+                        // Draw Series A (Solid Line)
                         ForEach(itemsA) { item in
                             let xVal = binding.extractX(from: item)
                             let yVal = binding.extractY(from: item)
 
                             LineMark(
                                 x: .value("X", xVal.description),
-                                y: .value("Y", Double(yVal))
+                                y: .value("Y", Double(yVal)),
+                                series: .value("Series", seriesA)
                             )
+                            .foregroundStyle(theme.seriesColors.first ?? theme.accentColor)
+                            .lineStyle(StrokeStyle(lineWidth: 3))
                         }
-                        .foregroundStyle(theme.seriesColors.first ?? theme.accentColor)
-                        .lineStyle(StrokeStyle(lineWidth: 3))
 
+                        // Draw Series B (Dashed Line with distinct Cyan/Blue Color)
                         ForEach(itemsB) { item in
                             let xVal = binding.extractX(from: item)
                             let yVal = binding.extractY(from: item)
 
                             LineMark(
                                 x: .value("X", xVal.description),
-                                y: .value("Y", Double(yVal))
+                                y: .value("Y", Double(yVal)),
+                                series: .value("Series", seriesB)
                             )
                             .foregroundStyle(theme.seriesColors.dropFirst().first ?? Color.blue)
                             .lineStyle(StrokeStyle(lineWidth: 2.5, dash: [4, 4]))
