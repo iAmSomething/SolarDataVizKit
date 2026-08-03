@@ -69,6 +69,14 @@ struct ContentView: View {
         ]
     }
 
+    var initialDragIndex: Int? {
+        let args = ProcessInfo.processInfo.arguments
+        if let idx = args.firstIndex(of: "--drag-index"), idx + 1 < args.count {
+            return Int(args[idx + 1])
+        }
+        return nil
+    }
+
     var body: some View {
         ZStack {
             Color(red: 11/255, green: 10/255, blue: 9/255).ignoresSafeArea()
@@ -123,7 +131,8 @@ struct ContentView: View {
                                     x: \.xLabel,
                                     y: \.value,
                                     group: \.groupIdentifier
-                                )
+                                ),
+                                initialSelectedIndex: initialDragIndex
                             )
                         }
                         .padding(16)

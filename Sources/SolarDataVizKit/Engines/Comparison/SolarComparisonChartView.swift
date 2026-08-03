@@ -38,11 +38,13 @@ public struct SolarComparisonChartView<
     public init(
         binding: VizDataBinding<Item, XValue, YValue>,
         seriesA: String = "Series A",
-        seriesB: String = "Series B"
+        seriesB: String = "Series B",
+        initialSelectedIndex: Int? = nil
     ) {
         self.binding = binding
         self.seriesA = seriesA
         self.seriesB = seriesB
+        self._selectedIndex = State(initialValue: initialSelectedIndex)
 
         // Cache grouped items once during init to prevent 60Hz main-thread re-grouping on body re-evaluations
         let groups = binding.sortedGroupedData()
