@@ -71,6 +71,9 @@ public struct SolarClusterScatterView<
                     .frame(width: node.radius * 2, height: node.radius * 2)
                     .position(node.center)
                     .transition(.scale.combined(with: .opacity))
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(node.isMerged ? "Merged cluster node" : "Single data point")
+                    .accessibilityValue("\(node.count) items")
                 }
             }
             .animation(.spring(response: 0.4, dampingFraction: 0.75), value: nodes.count)
@@ -94,6 +97,9 @@ public struct SolarClusterScatterView<
             RoundedRectangle(cornerRadius: environmentTheme.cornerRadius)
                 .stroke(environmentTheme.borderColor, lineWidth: 1)
         )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Cluster Scatter Plot")
+        .accessibilityValue("\(nodes.count) cluster nodes, \(binding.data.count) total points")
     }
 
     private func updateClustersOffMainThread(size: CGSize) async {

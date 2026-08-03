@@ -87,16 +87,34 @@ public struct IntersectionPathCalculator: Sendable {
         guard seriesA.count >= 2, seriesB.count >= 2 else { return [] }
         var result: [IntersectionPoint] = []
 
+        var startJ = 0
         for i in 0..<(seriesA.count - 1) {
             let a1 = seriesA[i]
             let a2 = seriesA[i + 1]
+            let minAx = min(a1.x, a2.x)
+            let maxAx = max(a1.x, a2.x)
 
-            for j in 0..<(seriesB.count - 1) {
+            // Advance startJ to prune B segments completely to the left of A segment (O(N) sweep)
+            while startJ < (seriesB.count - 1) && max(seriesB[startJ].x, seriesB[startJ + 1].x) < minAx {
+                startJ += 1
+            }
+
+            for j in startJ..<(seriesB.count - 1) {
                 let b1 = seriesB[j]
                 let b2 = seriesB[j + 1]
+                let minBx = min(b1.x, b2.x)
+                let maxBx = max(b1.x, b2.x)
 
-                if let intersection = lineSegmentIntersection(p1: a1, p2: a2, p3: b1, p4: b2) {
-                    result.append(IntersectionPoint(point: intersection, indexA: i, indexB: j))
+                // Early exit: B segment is completely to the right of A segment
+                if minBx > maxAx {
+                    break
+                }
+
+                // Fast X-bounding box overlap check before doing matrix determinant floating-point math
+                if !(maxAx < minBx || minAx > maxBx) {
+                    if let intersection = lineSegmentIntersection(p1: a1, p2: a2, p3: b1, p4: b2) {
+                        result.append(IntersectionPoint(point: intersection, indexA: i, indexB: j))
+                    }
                 }
             }
         }

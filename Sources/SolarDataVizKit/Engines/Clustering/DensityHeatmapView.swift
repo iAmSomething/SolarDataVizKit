@@ -37,5 +37,6 @@ public struct DensityHeatmapView: View {
                 .blur(radius: 8)
             }
         }
+        .drawingGroup() // Offloads heavy alpha compositing & blur to Metal hardware renderer
     }
 }

@@ -79,6 +79,10 @@ public struct SolarTreeMapView<
                             .frame(width: max(tile.rect.width - 4, 1), height: max(tile.rect.height - 4, 1))
                             .position(x: tile.rect.midX, y: tile.rect.midY)
                     )
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(binding.extractX(from: tile.item).description)")
+                    .accessibilityValue("\(String(format: "%.1f", tile.percentage)) percent")
+                    .accessibilityHint("Double tap to toggle selection highlight")
                     .onTapGesture {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                             selectedTileID = isSelected ? nil : tile.id
@@ -99,39 +103,103 @@ public struct SolarTreeMapView<
             RoundedRectangle(cornerRadius: environmentTheme.cornerRadius)
                 .stroke(environmentTheme.borderColor, lineWidth: 1)
         )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Treemap Category Allocation Chart")
+        .accessibilityValue("\(binding.data.count) tiles total")
     }
 
+    /// Bruls et al. Squarified Treemap Layout Algorithm
     private func computeTiles(bounds: CGRect) -> [TreeTile<Item>] {
         guard !binding.data.isEmpty, bounds.width > 0, bounds.height > 0 else { return [] }
-        let totalValue = binding.data.reduce(0.0) { $0 + Double(binding.extractY(from: $1)) }
+        let totalValue = binding.data.reduce(0.0) { $0 + max(0.0, Double(binding.extractY(from: $1))) }
         guard totalValue > 0 else { return [] }
 
-        var result: [TreeTile<Item>] = []
-        var currentRect = bounds
+        let sorted = binding.data.map { (item: $0, val: max(0.0, Double(binding.extractY(from: $0)))) }
+            .sorted { $0.val > $1.val }
 
-        let sortedItems = binding.data.sorted { Double(binding.extractY(from: $0)) > Double(binding.extractY(from: $1)) }
+        var tiles: [TreeTile<Item>] = []
+        var remainingRect = bounds
+        var currentRow: [(item: Item, val: Double)] = []
 
-        for (index, item) in sortedItems.enumerated() {
-            let val = Double(binding.extractY(from: item))
-            let pct = (val / totalValue) * 100.0
-            let ratio = val / totalValue
+        func worstAspectRatio(row: [(item: Item, val: Double)], sideLength: CGFloat) -> CGFloat {
+            guard !row.isEmpty, sideLength > 0 else { return .greatestFiniteMagnitude }
+            let sumVal = row.reduce(0.0) { $0 + $1.val }
+            let rowArea = (sumVal / totalValue) * Double(bounds.width * bounds.height)
+            guard rowArea > 0 else { return .greatestFiniteMagnitude }
 
-            let tileRect: CGRect
-            if currentRect.width >= currentRect.height {
-                let w = currentRect.width * CGFloat(ratio)
-                tileRect = CGRect(x: currentRect.origin.x, y: currentRect.origin.y, width: w, height: currentRect.height)
-                currentRect.origin.x += w
-                currentRect.size.width -= w
-            } else {
-                let h = currentRect.height * CGFloat(ratio)
-                tileRect = CGRect(x: currentRect.origin.x, y: currentRect.origin.y, width: currentRect.width, height: h)
-                currentRect.origin.y += h
-                currentRect.size.height -= h
+            let rowThickness = CGFloat(rowArea) / sideLength
+            var maxAR: CGFloat = 0
+
+            for elem in row {
+                let elemArea = (elem.val / totalValue) * Double(bounds.width * bounds.height)
+                let length = CGFloat(elemArea) / rowThickness
+                let ar = max(rowThickness / length, length / rowThickness)
+                if ar > maxAR { maxAR = ar }
             }
-
-            result.append(TreeTile(id: "tile_\(index)", item: item, rect: tileRect, percentage: pct))
+            return maxAR
         }
 
-        return result
+        func layoutRow(row: [(item: Item, val: Double)], in rect: inout CGRect) {
+            guard !row.isEmpty else { return }
+            let sumVal = row.reduce(0.0) { $0 + $1.val }
+            let rowFraction = sumVal / totalValue
+            let totalBoundsArea = bounds.width * bounds.height
+            let rowArea = CGFloat(rowFraction) * totalBoundsArea
+
+            let isHorizontal = rect.width >= rect.height
+            let sideLength = isHorizontal ? rect.height : rect.width
+            guard sideLength > 0 else { return }
+            let rowThickness = rowArea / sideLength
+
+            var offset: CGFloat = 0
+            for elem in row {
+                let elemFraction = elem.val / sumVal
+                let elemLength = sideLength * CGFloat(elemFraction)
+                let pct = (elem.val / totalValue) * 100.0
+
+                let tileRect: CGRect
+                if isHorizontal {
+                    tileRect = CGRect(x: rect.origin.x, y: rect.origin.y + offset, width: rowThickness, height: elemLength)
+                } else {
+                    tileRect = CGRect(x: rect.origin.x + offset, y: rect.origin.y, width: elemLength, height: rowThickness)
+                }
+                offset += elemLength
+                tiles.append(TreeTile(id: "tile_\(tiles.count)", item: elem.item, rect: tileRect, percentage: pct))
+            }
+
+            if isHorizontal {
+                rect.origin.x += rowThickness
+                rect.size.width -= rowThickness
+            } else {
+                rect.origin.y += rowThickness
+                rect.size.height -= rowThickness
+            }
+        }
+
+        for itemTuple in sorted {
+            let sideLength = min(remainingRect.width, remainingRect.height)
+
+            if currentRow.isEmpty {
+                currentRow.append(itemTuple)
+            } else {
+                let currentWorst = worstAspectRatio(row: currentRow, sideLength: sideLength)
+                var nextRow = currentRow
+                nextRow.append(itemTuple)
+                let nextWorst = worstAspectRatio(row: nextRow, sideLength: sideLength)
+
+                if nextWorst <= currentWorst {
+                    currentRow.append(itemTuple)
+                } else {
+                    layoutRow(row: currentRow, in: &remainingRect)
+                    currentRow = [itemTuple]
+                }
+            }
+        }
+
+        if !currentRow.isEmpty {
+            layoutRow(row: currentRow, in: &remainingRect)
+        }
+
+        return tiles
     }
 }

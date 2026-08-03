@@ -195,6 +195,9 @@ public struct SolarComparisonChartView<
                 )
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Comparison Line Chart, \(seriesA) versus \(seriesB)")
+        .accessibilityValue("\(itemsA.count) data points. Touch or drag to inspect delta values.")
     }
 
     private func checkIntersectionHaptic(at index: Int) {

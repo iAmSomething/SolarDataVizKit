@@ -110,6 +110,10 @@ public struct SolarSunburstView<
                         }
                         .stroke(isSelected ? Color.white : theme.borderColor, lineWidth: isSelected ? 2 : 1)
                     )
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(arc.label)")
+                    .accessibilityValue("\(String(format: "%.1f", arc.percentage)) percent")
+                    .accessibilityHint("Double tap to highlight segment")
                     .onTapGesture {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                             selectedArcID = isSelected ? nil : arc.id
@@ -148,40 +152,78 @@ public struct SolarSunburstView<
             RoundedRectangle(cornerRadius: environmentTheme.cornerRadius)
                 .stroke(environmentTheme.borderColor, lineWidth: 1)
         )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Hierarchical Sunburst Chart")
+        .accessibilityValue("\(binding.sortedGroupKeys.count) parent categories, \(binding.data.count) total child items")
     }
 
+    /// 2-Level Hierarchical Sunburst Ring Algorithm (Parent Group Ring + Child Sub-item Ring)
     private func computeArcs(center: CGPoint, maxRadius: CGFloat) -> [SunburstArc<Item>] {
         guard !binding.data.isEmpty, maxRadius > 0 else { return [] }
-        let totalValue = binding.data.reduce(0.0) { $0 + Double(binding.extractY(from: $1)) }
+        let totalValue = binding.data.reduce(0.0) { $0 + max(0.0, Double(binding.extractY(from: $1))) }
         guard totalValue > 0 else { return [] }
 
         var arcs: [SunburstArc<Item>] = []
-        var currentAngle: Double = -90.0 // Start at top
+        var currentAngle: Double = -90.0 // Start at 12 o'clock
 
-        let innerR = maxRadius * 0.45
-        let outerR = maxRadius * 0.85
+        let innerRingR0 = maxRadius * 0.30
+        let innerRingR1 = maxRadius * 0.58
 
-        for (index, item) in binding.data.enumerated() {
-            let val = Double(binding.extractY(from: item))
-            let pct = (val / totalValue) * 100.0
-            let sweep = (val / totalValue) * 360.0
+        let outerRingR0 = maxRadius * 0.62
+        let outerRingR1 = maxRadius * 0.90
 
-            let startA = Angle(degrees: currentAngle)
-            let endA = Angle(degrees: currentAngle + sweep)
-            currentAngle += sweep
+        let sortedGroupedData = binding.sortedGroupedData()
 
-            let label = binding.extractX(from: item).description
+        for (groupIndex, groupTuple) in sortedGroupedData.enumerated() {
+            let groupName = groupTuple.key
+            let groupItems = groupTuple.items
+            let groupSum = groupItems.reduce(0.0) { $0 + max(0.0, Double(binding.extractY(from: $1))) }
+            guard groupSum > 0 else { continue }
 
-            arcs.append(SunburstArc(
-                id: "arc_\(index)",
-                item: item,
-                startAngle: startA,
-                endAngle: endA,
-                innerRadius: innerR,
-                outerRadius: outerR,
-                label: label,
-                percentage: pct
-            ))
+            let groupSweep = (groupSum / totalValue) * 360.0
+            let groupStartAngle = currentAngle
+            let groupEndAngle = currentAngle + groupSweep
+            let groupPct = (groupSum / totalValue) * 100.0
+
+            // 1. Parent Level Arc (Inner Ring)
+            if let firstItem = groupItems.first {
+                arcs.append(SunburstArc(
+                    id: "parent_\(groupIndex)_\(groupName)",
+                    item: firstItem,
+                    startAngle: Angle(degrees: groupStartAngle),
+                    endAngle: Angle(degrees: groupEndAngle),
+                    innerRadius: innerRingR0,
+                    outerRadius: innerRingR1,
+                    label: groupName,
+                    percentage: groupPct
+                ))
+            }
+
+            // 2. Child Level Arcs (Outer Ring inside Parent angular span)
+            var childAngle = groupStartAngle
+            for (itemIndex, item) in groupItems.enumerated() {
+                let val = max(0.0, Double(binding.extractY(from: item)))
+                let itemSweep = (val / groupSum) * groupSweep
+                let itemStartA = Angle(degrees: childAngle)
+                let itemEndA = Angle(degrees: childAngle + itemSweep)
+                childAngle += itemSweep
+
+                let itemPct = (val / totalValue) * 100.0
+                let itemLabel = binding.extractX(from: item).description
+
+                arcs.append(SunburstArc(
+                    id: "child_\(groupIndex)_\(itemIndex)",
+                    item: item,
+                    startAngle: itemStartA,
+                    endAngle: itemEndA,
+                    innerRadius: outerRingR0,
+                    outerRadius: outerRingR1,
+                    label: itemLabel,
+                    percentage: itemPct
+                ))
+            }
+
+            currentAngle += groupSweep
         }
 
         return arcs
