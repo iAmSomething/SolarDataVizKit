@@ -89,6 +89,7 @@ public struct ClusterNodeCalculator: Sendable {
         var resultNodes: [ClusterNode] = []
 
         for i in 0..<points.count {
+            if Task.isCancelled { return [] }
             let current = points[i]
             if visited.contains(current.id) { continue }
 

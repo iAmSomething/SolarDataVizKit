@@ -331,4 +331,26 @@ final class EdgeCaseProductionTests: XCTestCase {
         XCTAssertEqual(grouped.count, 5)
         XCTAssertLessThan(elapsedMS, 50.0, "Single-pass O(N) sortedGroupedData must complete 100,000 items under 50ms")
     }
+
+    // MARK: - 20. Treemap Custom Layout Strategy Injection Test
+
+    @MainActor
+    func testTreemapStrategyPatternCustomSliceAndDice() {
+        let items = [
+            ProductionEdgeItem(id: "1", xLabel: "A", yValue: 50.0, category: "C", subCategory: "S"),
+            ProductionEdgeItem(id: "2", xLabel: "B", yValue: 50.0, category: "C", subCategory: "S")
+        ]
+
+        let binding = VizDataBinding(data: items, x: \.xLabel, y: \.yValue)
+        let sliceAndDiceView = SolarTreeMapView(binding: binding, strategy: SliceAndDiceTreemapStrategy())
+        XCTAssertNotNil(sliceAndDiceView)
+
+        let tiles = SliceAndDiceTreemapStrategy().computeTiles(
+            data: items,
+            extractY: { $0.yValue },
+            bounds: CGRect(x: 0, y: 0, width: 200, height: 100)
+        )
+        XCTAssertEqual(tiles.count, 2)
+        XCTAssertEqual(tiles[0].rect.width, 100.0)
+    }
 }
