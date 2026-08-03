@@ -20,6 +20,7 @@ struct SolarDataVizDemoApp: App {
 
 struct ContentView: View {
     @State private var selectedTab = 0
+    let timer = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
 
     var comparisonData: [SolarDefaultDataPoint] {
         let seriesA = (0..<10).map { i in
@@ -157,6 +158,11 @@ struct ContentView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 20)
+            }
+        }
+        .onReceive(timer) { _ in
+            withAnimation(.easeInOut(duration: 0.3)) {
+                selectedTab = (selectedTab + 1) % 4
             }
         }
     }
