@@ -6,18 +6,19 @@ import ViewInspector
 final class ClusterScatterUITests: XCTestCase {
 
     @MainActor
-    func testDensityHeatmapViewUIRendering() throws {
+    func testDensityHeatmapViewCanvasInitialization() throws {
         let nodes = [
             ClusterNode(center: CGPoint(x: 50, y: 50), radius: 20, childIDs: ["p1"], count: 1),
             ClusterNode(center: CGPoint(x: 100, y: 100), radius: 30, childIDs: ["p2", "p3"], count: 2)
         ]
 
         let heatmap = DensityHeatmapView(nodes: nodes)
-        XCTAssertNotNil(heatmap)
+        let canvas = try heatmap.inspect().canvas()
+        XCTAssertNotNil(canvas, "DensityHeatmapView must render a high-performance Canvas for single-pass Metal GPU rasterization")
     }
 
     @MainActor
-    func testSolarClusterScatterViewUIRendering() throws {
+    func testSolarClusterScatterViewDynamicGeometryReader() throws {
         struct ScatterPoint: SolarVizDataPoint {
             let id: Int
             let xPos: Double
@@ -40,6 +41,23 @@ final class ClusterScatterUITests: XCTestCase {
             binding: binding,
             clusterRadiusThreshold: 40.0
         )
-        XCTAssertNotNil(scatterView)
+        let geometry = try scatterView.inspect().geometryReader()
+        XCTAssertNotNil(geometry, "SolarClusterScatterView must wrap canvas inside GeometryReader for responsive size extraction")
+    }
+
+    func testClusterNodeStatefulCentroidAndRadiusCalculations() async throws {
+        let inputPoints = (0..<10).map { i in
+            (id: "pt_\(i)", point: CGPoint(x: 100.0 + Double(i), y: 100.0 + Double(i)), weight: 1.0)
+        }
+
+        let nodes = await ClusterNodeCalculator.cluster(
+            points: inputPoints,
+            thresholdRadius: 50.0
+        )
+
+        XCTAssertEqual(nodes.count, 1, "All 10 points within 50.0px threshold radius must merge into exactly 1 cluster node")
+        XCTAssertEqual(nodes[0].count, 10, "Merged cluster node count must equal 10")
+        XCTAssertEqual(nodes[0].childIDs.count, 10, "Child IDs count must equal 10")
+        XCTAssertGreaterThan(nodes[0].radius, 0.0, "Node radius must be non-zero")
     }
 }

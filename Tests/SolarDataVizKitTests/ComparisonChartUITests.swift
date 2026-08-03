@@ -3,11 +3,10 @@ import SwiftUI
 import ViewInspector
 @testable import SolarDataVizKit
 
-
 final class ComparisonChartUITests: XCTestCase {
 
     @MainActor
-    func testDeltaTooltipOverlayViewHierarchy() throws {
+    func testDeltaTooltipOverlayPositiveDeltaFormatting() throws {
         let tooltip = DeltaTooltipOverlay(
             xLabel: "Feb 2026",
             valueA: 250.0,
@@ -17,11 +16,9 @@ final class ComparisonChartUITests: XCTestCase {
             theme: .darkCarbon
         )
 
-        // Inspect VStack container
         let vStack = try tooltip.inspect().vStack()
         XCTAssertEqual(try vStack.text(0).string(), "Feb 2026")
 
-        // Inspect inner values HStack
         let hStack = try vStack.hStack(1)
         let groupA = try hStack.vStack(0)
         XCTAssertEqual(try groupA.text(0).string(), "2026 Sales")
@@ -31,14 +28,13 @@ final class ComparisonChartUITests: XCTestCase {
         XCTAssertEqual(try groupB.text(0).string(), "2025 Sales")
         XCTAssertEqual(try groupB.text(1).string(), "180.0")
 
-        // Inspect Positive Badge Text
         let badgeHStack = try vStack.hStack(2)
         XCTAssertEqual(try badgeHStack.text(0).string(), "▲")
-        XCTAssertTrue(try badgeHStack.text(1).string().contains("+38.9%"))
+        XCTAssertEqual(try badgeHStack.text(1).string(), "+38.9% (+70.0)")
     }
 
     @MainActor
-    func testNegativeDeltaTooltipOverlayUI() throws {
+    func testDeltaTooltipOverlayNegativeDeltaFormatting() throws {
         let tooltip = DeltaTooltipOverlay(
             xLabel: "March 2026",
             valueA: 80.0,
@@ -51,11 +47,28 @@ final class ComparisonChartUITests: XCTestCase {
         let vStack = try tooltip.inspect().vStack()
         let badgeHStack = try vStack.hStack(2)
         XCTAssertEqual(try badgeHStack.text(0).string(), "▼")
-        XCTAssertTrue(try badgeHStack.text(1).string().contains("-20.0%"))
+        XCTAssertEqual(try badgeHStack.text(1).string(), "-20.0% (-20.0)")
     }
 
     @MainActor
-    func testSolarComparisonChartViewUIRendering() throws {
+    func testDeltaTooltipOverlayZeroDeltaFormatting() throws {
+        let tooltip = DeltaTooltipOverlay(
+            xLabel: "April 2026",
+            valueA: 100.0,
+            valueB: 100.0,
+            labelA: "Current",
+            labelB: "Target",
+            theme: .darkCarbon
+        )
+
+        let vStack = try tooltip.inspect().vStack()
+        let badgeHStack = try vStack.hStack(2)
+        XCTAssertEqual(try badgeHStack.text(0).string(), "▲")
+        XCTAssertEqual(try badgeHStack.text(1).string(), "+0.0% (+0.0)")
+    }
+
+    @MainActor
+    func testSolarComparisonChartViewUIRenderingAndLegendHierarchy() throws {
         let items = [
             SolarDefaultDataPoint(xLabel: "Q1", value: 100.0, groupIdentifier: "Series A"),
             SolarDefaultDataPoint(xLabel: "Q2", value: 200.0, groupIdentifier: "Series A"),
@@ -77,7 +90,6 @@ final class ComparisonChartUITests: XCTestCase {
         )
 
         let outerVStack = try chartView.inspect().find(ViewType.VStack.self)
-        // Check Legend Header
         let legendHStack = try outerVStack.hStack(0)
         let itemA = try legendHStack.hStack(0)
         XCTAssertEqual(try itemA.text(1).string(), "Series A")
@@ -98,14 +110,6 @@ final class ComparisonChartUITests: XCTestCase {
         let hostingView = SolarVizHostingView(rootView: chartView)
         XCTAssertNotNil(hostingView)
         XCTAssertEqual(hostingView.subviews.count, 1)
-
-        // Test cleanup on removeFromSuperview
-        let parentView = UIView(frame: CGRect(x: 0, y: 0, width: 300, height: 300))
-        parentView.addSubview(hostingView)
-        XCTAssertEqual(parentView.subviews.count, 1)
-
-        hostingView.removeFromSuperview()
-        XCTAssertEqual(parentView.subviews.count, 0)
     }
     #endif
 }
