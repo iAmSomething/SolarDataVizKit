@@ -162,6 +162,7 @@ public struct SolarBayesianTrendView<Item: Identifiable & Sendable, XValue: Bina
                 yEnd: .value("Upper", pt.upperLimit)
             )
             .foregroundStyle(bandColor)
+            .interpolationMethod(.catmullRom)
         }
 
         // 3. Posterior Mean Line
@@ -172,6 +173,7 @@ public struct SolarBayesianTrendView<Item: Identifiable & Sendable, XValue: Bina
             )
             .foregroundStyle(theme.accentColor)
             .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round))
+            .interpolationMethod(.catmullRom)
         }
 
         // 4. Touch Highlight
