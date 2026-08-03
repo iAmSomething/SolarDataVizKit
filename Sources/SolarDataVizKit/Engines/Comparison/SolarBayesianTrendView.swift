@@ -1,7 +1,7 @@
 import SwiftUI
 import Charts
 
-/// 베이지안 수치해석 추이 및 오차 범위(95% 신뢰 불확실성 구간) 시각화 컴포넌트입니다.
+/// 베이지안 수치해석 추이 및 오차 범위(95% 신뢰 불확실성 구간) 시각화 컴포넌트입니다. (Swift 6 Concurrency & Zero Main-Thread Blocking)
 public struct SolarBayesianTrendView<Item: Identifiable & Sendable, XValue: BinaryFloatingPoint & Sendable, YValue: BinaryFloatingPoint & Sendable>: View {
     public let binding: VizDataBinding<Item, XValue, YValue>
     public let title: String
@@ -9,6 +9,7 @@ public struct SolarBayesianTrendView<Item: Identifiable & Sendable, XValue: Bina
 
     @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
     @State private var selectedPointIndex: Int?
+    @State private var trendPoints: [BayesianTrendPoint] = []
 
     public init(
         binding: VizDataBinding<Item, XValue, YValue>,
@@ -18,15 +19,6 @@ public struct SolarBayesianTrendView<Item: Identifiable & Sendable, XValue: Bina
         self.binding = binding
         self.title = title
         self.bandOpacity = bandOpacity
-    }
-
-    private var trendPoints: [BayesianTrendPoint] {
-        let rawPoints = binding.data.map { item -> CGPoint in
-            let x = Double(binding.extractX(from: item))
-            let y = Double(binding.extractY(from: item))
-            return CGPoint(x: x, y: y)
-        }
-        return BayesianTrendCalculator.computeTrend(points: rawPoints, sampleCount: 80)
     }
 
     public var body: some View {
@@ -59,7 +51,7 @@ public struct SolarBayesianTrendView<Item: Identifiable & Sendable, XValue: Bina
 
                 ZStack(alignment: .topLeading) {
                     Chart {
-                        chartContent
+                        chartContent(points: points, theme: theme)
                     }
                     .chartOverlay { proxy in
                         GeometryReader { chartGeo in
@@ -131,15 +123,25 @@ public struct SolarBayesianTrendView<Item: Identifiable & Sendable, XValue: Bina
                     .stroke(environmentTheme.borderColor, lineWidth: 1)
             )
         }
+        .task(id: binding.dataHash) {
+            let localBinding = self.binding
+            let calculated = await Task.detached(priority: .userInitiated) { () -> [BayesianTrendPoint] in
+                let rawPoints = localBinding.data.map { item -> CGPoint in
+                    let x = Double(localBinding.extractX(from: item))
+                    let y = Double(localBinding.extractY(from: item))
+                    return CGPoint(x: x, y: y)
+                }
+                return BayesianTrendCalculator.computeTrend(points: rawPoints, sampleCount: 80)
+            }.value
+            self.trendPoints = calculated
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Bayesian Trend and Uncertainty Plot")
         .accessibilityValue("\(binding.data.count) observation points")
     }
 
     @ChartContentBuilder
-    private var chartContent: some ChartContent {
-        let theme = environmentTheme
-        let points = trendPoints
+    private func chartContent(points: [BayesianTrendPoint], theme: SolarVizTheme) -> some ChartContent {
         let bandColor = theme.accentColor.opacity(bandOpacity)
 
         // 1. Raw Scatter Points

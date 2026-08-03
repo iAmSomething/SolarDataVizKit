@@ -28,9 +28,17 @@ struct SolarDataVizDemoApp: App {
         return 0
     }
 
+    private var initialBayesPreset: Int {
+        let args = ProcessInfo.processInfo.arguments
+        if let idx = args.firstIndex(of: "--bayes-preset"), idx + 1 < args.count {
+            return Int(args[idx + 1]) ?? 0
+        }
+        return 0
+    }
+
     var body: some Scene {
         WindowGroup {
-            ContentView(selectedChartIndex: initialIndex)
+            ContentView(selectedChartIndex: initialIndex, initialBayesPreset: initialBayesPreset)
                 .preferredColorScheme(.dark)
         }
     }
@@ -38,9 +46,11 @@ struct SolarDataVizDemoApp: App {
 
 struct ContentView: View {
     @State var selectedChartIndex: Int
+    @State private var bayesianPresetIndex: Int
 
-    init(selectedChartIndex: Int = 0) {
+    init(selectedChartIndex: Int = 0, initialBayesPreset: Int = 0) {
         _selectedChartIndex = State(initialValue: selectedChartIndex)
+        _bayesianPresetIndex = State(initialValue: initialBayesPreset)
     }
 
     let chartTitles = [
@@ -57,10 +67,21 @@ struct ContentView: View {
         "11. UIKit Hosting Wrapper",
         "12. Bayesian Numerical Trend & Uncertainty Band"
     ]
-
-    var bayesianTrendData: [SolarDefaultDataPoint] {
+    var bayesianFriendlyData: [SolarDefaultDataPoint] {
         let xs = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
         let ys = [12.0, 19.0, 22.0, 35.0, 41.0, 50.0, 58.0, 69.0, 75.0, 91.0]
+        return xs.indices.map { SolarDefaultDataPoint(xLabel: String(xs[$0]), value: ys[$0]) }
+    }
+
+    var bayesianEvilVolatileData: [SolarDefaultDataPoint] {
+        let xs = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
+        let ys = [5.0, 85.0, 12.0, 140.0, 25.0, 190.0, 30.0, 220.0, 45.0, 310.0]
+        return xs.indices.map { SolarDefaultDataPoint(xLabel: String(xs[$0]), value: ys[$0]) }
+    }
+
+    var bayesianZeroVarianceData: [SolarDefaultDataPoint] {
+        let xs = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
+        let ys = [50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0]
         return xs.indices.map { SolarDefaultDataPoint(xLabel: String(xs[$0]), value: ys[$0]) }
     }
 
@@ -316,11 +337,37 @@ struct ContentView: View {
                         }
                         .padding(16)
                     default:
+                        let currentData = bayesianPresetIndex == 0 ? bayesianFriendlyData : (bayesianPresetIndex == 1 ? bayesianEvilVolatileData : bayesianZeroVarianceData)
+                        let presetTitle = bayesianPresetIndex == 0 ? "1. Friendly Growth Trend" : (bayesianPresetIndex == 1 ? "2. Evil Volatile Outlier Spikes" : "3. Zero-Variance Flat Line Defense")
+
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Engine 12: Bayesian Numerical Trend & Uncertainty Band")
-                                .font(.headline).foregroundColor(.white)
+                            HStack {
+                                Text("Engine 12: Bayesian Numerical Trend")
+                                    .font(.headline).foregroundColor(.white)
+                                Spacer()
+                                Text(presetTitle)
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundColor(.orange)
+                            }
+
+                            HStack(spacing: 8) {
+                                Button("Friendly") { bayesianPresetIndex = 0 }
+                                    .buttonStyle(.borderedProminent)
+                                    .tint(bayesianPresetIndex == 0 ? .orange : .gray)
+
+                                Button("Evil Spikes") { bayesianPresetIndex = 1 }
+                                    .buttonStyle(.borderedProminent)
+                                    .tint(bayesianPresetIndex == 1 ? .red : .gray)
+
+                                Button("Zero Var") { bayesianPresetIndex = 2 }
+                                    .buttonStyle(.borderedProminent)
+                                    .tint(bayesianPresetIndex == 2 ? .blue : .gray)
+                            }
+                            .font(.system(size: 11, weight: .bold))
+
                             SolarBayesianTrendView(
-                                binding: VizDataBinding(data: bayesianTrendData, x: \.value, y: \.value)
+                                binding: VizDataBinding(data: currentData, x: \.value, y: \.value),
+                                title: presetTitle
                             )
                         }
                         .padding(16)

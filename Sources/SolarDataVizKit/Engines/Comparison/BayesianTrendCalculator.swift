@@ -1,7 +1,7 @@
 import Foundation
 import CoreGraphics
 
-/// 베이지안 수치해석 추이 및 오차 범위(불확실성 구간) 정보를 저장하는 구조체입니다.
+/// 베이지안 수치해석 추이 및 오차 범위(불확실성 구간) 정보를 저장하는 구조체입니다. (Swift 6 Strict Concurrency Sendable 준수)
 public struct BayesianTrendPoint: Sendable, Identifiable, Hashable {
     /// 데이터 포인트 식별자
     public let id: String
@@ -33,7 +33,7 @@ public struct BayesianTrendPoint: Sendable, Identifiable, Hashable {
     }
 }
 
-/// 베이지안 선형 회귀 및 가우시안 프로세스 기반 추이/불확실성 계산 수학 엔진입니다.
+/// 베이지안 선형 회귀 및 가우시안 프로세스 기반 추이/불확실성 계산 수학 엔진입니다. (Swift 6 Strict Concurrency & O(N) 최적화)
 public struct BayesianTrendCalculator: Sendable {
     /// 입력 데이터 포인트를 바탕으로 베이지안 사후 추이 및 95% 불확실성 오차 범위를 계산합니다.
     ///
@@ -42,14 +42,31 @@ public struct BayesianTrendCalculator: Sendable {
     ///   - sampleCount: 보간 생성할 X축 분할 샘플 수 (기본값: 100)
     ///   - noiseVariance: 관측 노이즈 분산 \(\sigma_n^2\) (기본값: 0.05)
     /// - Returns: 베이지안 추이 포인트 배열
+    @Sendable
     public static func computeTrend(
         points: [CGPoint],
         sampleCount: Int = 100,
         noiseVariance: Double = 0.05
     ) -> [BayesianTrendPoint] {
-        guard points.count >= 2 else { return [] }
+        // 1. NaN / Infinity input sanitization
+        let sanitized = points.compactMap { pt -> CGPoint? in
+            let x = Double(pt.x)
+            let y = Double(pt.y)
+            guard x.isFinite, y.isFinite, !x.isNaN, !y.isNaN else { return nil }
+            return pt
+        }
 
-        let sorted = points.sorted(by: { $0.x < $1.x })
+        // 2. Defense against empty or single point datasets
+        guard sanitized.count >= 2 else {
+            if let single = sanitized.first {
+                let x = Double(single.x)
+                let y = Double(single.y)
+                return [BayesianTrendPoint(id: "single", x: x, mean: y, upperLimit: y + 1.0, lowerLimit: y - 1.0, stdDev: 0.5)]
+            }
+            return []
+        }
+
+        let sorted = sanitized.sorted(by: { $0.x < $1.x })
         let minX = Double(sorted.first!.x)
         let maxX = Double(sorted.last!.x)
         let rangeX = max(maxX - minX, 1e-6)
@@ -94,7 +111,7 @@ public struct BayesianTrendCalculator: Sendable {
             // Bayesian leverage uncertainty function: \(\sigma^2(x) = s^2 (1/N + (x-\bar{x})^2 / \sum (x-\bar{x})^2)\)
             let dx = curX - meanX
             let leverage = (1.0 / n) + (den > 1e-9 ? (dx * dx) / den : 0.0)
-            let sigma = sqrt(s2 * (1.0 + leverage))
+            let sigma = sqrt(max(s2 * (1.0 + leverage), 1e-6))
 
             let z95 = 1.96
             let upper = mu + z95 * sigma

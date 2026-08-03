@@ -815,4 +815,37 @@ final class EdgeCaseProductionTests: XCTestCase {
         XCTAssertEqual(trend.count, 100)
         XCTAssertLessThan(elapsedMs, 30.0, "10,000 point Bayesian trend computation must finish under 30ms")
     }
+
+    // MARK: - 42. Phase 10: Swift 6 Strict Concurrency Sendable Conformity Test
+
+    func testSwift6SendableBayesianTrendConformity() async {
+        let points = [CGPoint(x: 1, y: 10), CGPoint(x: 2, y: 20)]
+        let task = Task.detached { () -> [BayesianTrendPoint] in
+            return BayesianTrendCalculator.computeTrend(points: points, sampleCount: 20)
+        }
+        let result = await task.value
+        XCTAssertEqual(result.count, 20)
+    }
+
+    // MARK: - 43. Phase 10: Evil Edge Case NaN / Infinity / Zero-Variance Input Defense
+
+    func testEvilEdgeCaseZeroVarianceAndNaNInputs() {
+        let evilPoints = [
+            CGPoint(x: 1.0, y: 50.0),
+            CGPoint(x: 2.0, y: 50.0),
+            CGPoint(x: Double.nan, y: 50.0),
+            CGPoint(x: 3.0, y: Double.infinity),
+            CGPoint(x: 4.0, y: 50.0)
+        ]
+
+        let trend = BayesianTrendCalculator.computeTrend(points: evilPoints, sampleCount: 30)
+        XCTAssertEqual(trend.count, 30)
+
+        for pt in trend {
+            XCTAssertFalse(pt.mean.isNaN, "Mean must never be NaN")
+            XCTAssertFalse(pt.upperLimit.isNaN, "Upper limit must never be NaN")
+            XCTAssertFalse(pt.lowerLimit.isNaN, "Lower limit must never be NaN")
+            XCTAssertTrue(pt.mean.isFinite, "Mean must be finite")
+        }
+    }
 }
