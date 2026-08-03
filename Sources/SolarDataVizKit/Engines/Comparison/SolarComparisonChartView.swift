@@ -180,6 +180,7 @@ public struct SolarComparisonChartView<
                             labelB: seriesB,
                             theme: theme
                         )
+                        .offset(x: clampedX, y: 0)
                         .transition(.opacity.combined(with: .scale(scale: 0.95)))
                         .padding(12)
                     }

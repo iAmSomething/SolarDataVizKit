@@ -45,23 +45,21 @@ public final class SolarVizHostingView<Content: View>: UIView {
     /// 뷰가 윈도우 계층에 추가될 때 부모 UIViewController를 탐색하여 addChild 및 didMove(toParent:) 생명주기를 연결합니다.
     override public func didMoveToWindow() {
         super.didMoveToWindow()
-        if window != nil, let controller = hostingController {
-            if let parentVC = findParentViewController() {
-                if controller.parent != parentVC {
-                    parentVC.addChild(controller)
-                    controller.didMove(toParent: parentVC)
-                }
-            }
+        guard window != nil, let controller = hostingController else { return }
+
+        if let parent = findParentViewController(), controller.parent == nil {
+            parent.addChild(controller)
+            controller.didMove(toParent: parent)
         }
     }
 
     private func findParentViewController() -> UIViewController? {
         var responder: UIResponder? = self
-        while responder != nil {
-            responder = responder?.next
-            if let vc = responder as? UIViewController {
+        while let r = responder {
+            if let vc = r as? UIViewController {
                 return vc
             }
+            responder = r.next
         }
         return nil
     }
