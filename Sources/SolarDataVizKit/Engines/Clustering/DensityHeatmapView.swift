@@ -13,30 +13,35 @@ import SwiftUI
 /// ```
 public struct DensityHeatmapView: View {
     public let nodes: [ClusterNode]
-    public let theme: SolarVizTheme
 
-    public init(nodes: [ClusterNode], theme: SolarVizTheme = .darkCarbon) {
+    public init(nodes: [ClusterNode]) {
         self.nodes = nodes
-        self.theme = theme
     }
 
     public var body: some View {
-        ZStack {
-            ForEach(nodes) { node in
-                RadialGradient(
-                    gradient: Gradient(colors: [
-                        theme.accentColor.opacity(node.isMerged ? 0.35 : 0.15),
-                        theme.accentColor.opacity(0.0)
-                    ]),
-                    center: .center,
+        let renderableNodes = Array(nodes.sorted(by: { $0.count > $1.count }).prefix(250))
+
+        Canvas { context, size in
+            for node in renderableNodes {
+                let rect = CGRect(
+                    x: node.center.x - node.radius * 2.5,
+                    y: node.center.y - node.radius * 2.5,
+                    width: node.radius * 5.0,
+                    height: node.radius * 5.0
+                )
+                let gradient = Gradient(colors: [
+                    Color.orange.opacity(min(Double(node.count) * 0.3, 0.85)),
+                    Color.orange.opacity(0.0)
+                ])
+                let shading = GraphicsContext.Shading.radialGradient(
+                    gradient,
+                    center: node.center,
                     startRadius: 0,
                     endRadius: node.radius * 2.5
                 )
-                .frame(width: node.radius * 5.0, height: node.radius * 5.0)
-                .position(node.center)
-                .blur(radius: 8)
+                context.fill(Path(ellipseIn: rect), with: shading)
             }
         }
-        .drawingGroup() // Offloads heavy alpha compositing & blur to Metal hardware renderer
+        .drawingGroup() // Single-pass Metal GPU hardware rasterization
     }
 }

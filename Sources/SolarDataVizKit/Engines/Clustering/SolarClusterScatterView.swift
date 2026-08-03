@@ -18,7 +18,7 @@ import SwiftUI
 /// ```
 public struct SolarClusterScatterView<
     Item: Identifiable & Sendable,
-    XValue: BinaryFloatingPoint & Sendable,
+    XValue: Hashable & Sendable,
     YValue: BinaryFloatingPoint & Sendable
 >: View {
     public let binding: VizDataBinding<Item, XValue, YValue>
@@ -43,40 +43,15 @@ public struct SolarClusterScatterView<
             let size = geometry.size
 
             ZStack {
-                // Density Heatmap Layer
-                DensityHeatmapView(nodes: nodes, theme: theme)
+                // Density Heatmap Layer (Single-pass Canvas rasterization)
+                DensityHeatmapView(nodes: nodes)
 
                 // Cluster Nodes Layer
                 ForEach(nodes) { node in
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        theme.accentColor,
-                                        theme.seriesColors.first ?? theme.accentColor
-                                    ]),
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .shadow(color: theme.accentColor.opacity(0.4), radius: node.isMerged ? 6 : 3)
-
-                        if node.isMerged {
-                            Text("+\(node.count)")
-                                .font(.system(size: max(10, node.radius * 0.45), weight: .bold, design: .rounded))
-                                .foregroundColor(.white)
-                        }
-                    }
-                    .frame(width: node.radius * 2, height: node.radius * 2)
-                    .position(node.center)
-                    .transition(.scale.combined(with: .opacity))
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(node.isMerged ? "Merged cluster node" : "Single data point")
-                    .accessibilityValue("\(node.count) items")
+                    clusterNodeView(node: node, theme: theme)
                 }
             }
-            .animation(.spring(response: 0.4, dampingFraction: 0.75), value: nodes.count)
+            .animation(.spring(response: 0.4, dampingFraction: 0.7), value: nodes)
             .onChange(of: nodes.count) { newCount in
                 if previousClusterCount != 0 && previousClusterCount != newCount {
                     Task { @MainActor in
@@ -102,6 +77,38 @@ public struct SolarClusterScatterView<
         .accessibilityValue("\(nodes.count) cluster nodes, \(binding.data.count) total points")
     }
 
+    @ViewBuilder
+    private func clusterNodeView(node: ClusterNode, theme: SolarVizTheme) -> some View {
+        let radius = node.radius
+        let count = node.count
+        let isMerged = node.isMerged
+
+        ZStack {
+            Circle()
+                .fill(
+                    RadialGradient(
+                        gradient: Gradient(colors: [
+                            theme.accentColor,
+                            theme.accentColor.opacity(0.6)
+                        ]),
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: radius
+                    )
+                )
+                .frame(width: radius * 2, height: radius * 2)
+
+            if isMerged {
+                let fontSize = max(radius * 0.5, 10.0)
+                let badgeText = "+\(count)"
+                Text(badgeText)
+                    .font(.system(size: fontSize, weight: .bold))
+                    .foregroundColor(theme.primaryTextColor)
+            }
+        }
+        .position(node.center)
+    }
+
     private func updateClustersOffMainThread(size: CGSize) async {
         guard size.width > 0, size.height > 0 else { return }
 
@@ -115,17 +122,28 @@ public struct SolarClusterScatterView<
 
         let localBinding = self.binding
         let radius = clusterRadiusThreshold
-        let boundsX = xBounds()
         let boundsY = binding.yBounds()
 
-        // Offload O(N^2) clustering to detached background thread
+        // Offload clustering to background thread supporting both Numeric and Categorical (String/Date) XValues
         let calculated = await Task.detached(priority: .userInitiated) { () -> [ClusterNode] in
-            let points = localBinding.data.map { item -> (id: String, point: CGPoint, weight: Double) in
+            let distinctX = Array(Set(localBinding.data.map { localBinding.extractX(from: $0) }))
+            let points = localBinding.data.enumerated().map { (idx, item) -> (id: String, point: CGPoint, weight: Double) in
                 let rawX = localBinding.extractX(from: item)
-                let spanX = boundsX.max - boundsX.min
-                let normX = spanX > 0 ? Double((rawX - boundsX.min) / spanX) : 0.5
-                let normY = localBinding.normalizeY(value: localBinding.extractY(from: item), in: boundsY)
+                let normX: Double
 
+                if let numX = Double(String(describing: rawX)) {
+                    let allNums = localBinding.data.compactMap { Double(String(describing: localBinding.extractX(from: $0))) }
+                    let minVal = allNums.min() ?? 0
+                    let maxVal = allNums.max() ?? 1
+                    let span = maxVal - minVal
+                    normX = span > 0 ? (numX - minVal) / span : 0.5
+                } else {
+                    let catIdx = distinctX.firstIndex(of: rawX) ?? 0
+                    let count = max(distinctX.count, 1)
+                    normX = count > 1 ? Double(catIdx) / Double(count - 1) : 0.5
+                }
+
+                let normY = localBinding.normalizeY(value: localBinding.extractY(from: item), in: boundsY)
                 let posX = 30 + CGFloat(normX) * (size.width - 60)
                 let posY = size.height - 30 - CGFloat(normY) * (size.height - 60)
                 return (id: String(describing: item.id), point: CGPoint(x: posX, y: posY), weight: 1.0)
@@ -135,28 +153,5 @@ public struct SolarClusterScatterView<
 
         SolarVizLayoutCache.shared.setClusterNodes(calculated, forKey: cacheKey)
         self.nodes = calculated
-    }
-
-    private func xBounds() -> (min: XValue, max: XValue) {
-        guard !binding.data.isEmpty else { return (0, 1) }
-        var minX = binding.extractX(from: binding.data[0])
-        var maxX = minX
-
-        for item in binding.data {
-            let val = binding.extractX(from: item)
-            if val < minX { minX = val }
-            if val > maxX { maxX = val }
-        }
-        if minX == maxX {
-            minX = minX == 0 ? 0 : minX * 0.9
-            maxX = maxX == 0 ? 1 : maxX * 1.1
-        }
-        return (minX, maxX)
-    }
-
-    private func normalize(val: XValue, min: XValue, max: XValue) -> Double {
-        let span = max - min
-        guard span > 0 else { return 0.5 }
-        return Double((val - min) / span)
     }
 }

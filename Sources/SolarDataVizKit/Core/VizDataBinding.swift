@@ -157,4 +157,83 @@ public struct VizDataBinding<
         let normalized = (value - range.min) / span
         return min(max(Double(normalized), 0.0), 1.0)
     }
+
+    /// hierarchyKeyPaths 배열을 순회하여 N-계층 트리 구조(HierarchyNode)를 재귀적으로 구축합니다.
+    public func buildHierarchyTree() -> HierarchyNode<Item> {
+        let paths = hierarchyKeyPaths.isEmpty ? (groupKeyPath != nil ? [groupKeyPath!] : []) : hierarchyKeyPaths
+        guard !paths.isEmpty else {
+            let total = data.reduce(0.0) { $0 + max(0.0, Double(extractY(from: $1))) }
+            let leaves = data.map { item in
+                HierarchyNode(
+                    name: String(describing: extractX(from: item)),
+                    value: max(0.0, Double(extractY(from: item))),
+                    level: 1,
+                    item: item
+                )
+            }
+            return HierarchyNode(name: "Root", value: total, level: 0, children: leaves)
+        }
+
+        func buildSubtree(items: [Item], depth: Int) -> [HierarchyNode<Item>] {
+            guard depth < paths.count else {
+                return items.map { item in
+                    HierarchyNode(
+                        name: String(describing: extractX(from: item)),
+                        value: max(0.0, Double(extractY(from: item))),
+                        level: depth + 1,
+                        item: item
+                    )
+                }
+            }
+
+            let kp = paths[depth]
+            var groups: [String: [Item]] = [:]
+            var groupKeys: [String] = []
+
+            for item in items {
+                let key = item[keyPath: kp]
+                if groups[key] == nil { groupKeys.append(key) }
+                groups[key, default: []].append(item)
+            }
+
+            return groupKeys.compactMap { key in
+                guard let groupItems = groups[key] else { return nil }
+                let children = buildSubtree(items: groupItems, depth: depth + 1)
+                let groupTotal = children.reduce(0.0) { $0 + $1.value }
+                return HierarchyNode(name: key, value: groupTotal, level: depth + 1, children: children)
+            }
+        }
+
+        let rootChildren = buildSubtree(items: data, depth: 0)
+        let rootTotal = rootChildren.reduce(0.0) { $0 + $1.value }
+        return HierarchyNode(name: "Root", value: rootTotal, level: 0, children: rootChildren)
+    }
+}
+
+/// 다단계 계층 트리 구조를 표현하는 노드 모델입니다.
+public struct HierarchyNode<Item: Sendable>: Identifiable, Sendable {
+    public let id: String
+    public let name: String
+    public let value: Double
+    public let level: Int
+    public let children: [HierarchyNode<Item>]
+    public let item: Item?
+
+    public init(
+        id: String = UUID().uuidString,
+        name: String,
+        value: Double,
+        level: Int = 0,
+        children: [HierarchyNode<Item>] = [],
+        item: Item? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.value = value
+        self.level = level
+        self.children = children
+        self.item = item
+    }
+
+    public var isLeaf: Bool { children.isEmpty }
 }

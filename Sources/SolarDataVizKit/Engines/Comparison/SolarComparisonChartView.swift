@@ -144,16 +144,18 @@ public struct SolarComparisonChartView<
                     }
                     .padding(8)
 
-                    // Tooltip Overlay on Touch Selection
-                    if let selectedIndex, selectedIndex < itemsA.count, selectedIndex < itemsB.count {
+                    // Key-Based Joined Tooltip Overlay on Touch Selection
+                    if let selectedIndex, selectedIndex < itemsA.count {
                         let itemA = itemsA[selectedIndex]
-                        let itemB = itemsB[selectedIndex]
-                        let xVal = binding.extractX(from: itemA).description
+                        let xKeyA = binding.extractX(from: itemA).description
                         let valA = Double(binding.extractY(from: itemA))
-                        let valB = Double(binding.extractY(from: itemB))
+
+                        // Match item B by exact X-key equality instead of blind array index matching
+                        let matchingItemB = itemsB.first { binding.extractX(from: $0).description == xKeyA }
+                        let valB = matchingItemB != nil ? Double(binding.extractY(from: matchingItemB!)) : valA
 
                         DeltaTooltipOverlay(
-                            xLabel: xVal,
+                            xLabel: xKeyA,
                             valueA: valA,
                             valueB: valB,
                             labelA: seriesA,
@@ -176,8 +178,8 @@ public struct SolarComparisonChartView<
                     DragGesture(minimumDistance: 0)
                         .onChanged { value in
                             let totalCount = max(itemsA.count, 1)
-                            let step = max(value.location.x / containerWidth, 0.0) // Dynamically normalized by containerWidth
-                            let index = min(max(Int(step * CGFloat(totalCount)), 0), totalCount - 1)
+                            let ratio = min(max(value.location.x / containerWidth, 0.0), 1.0)
+                            let index = min(max(Int(round(ratio * CGFloat(totalCount - 1))), 0), totalCount - 1)
 
                             if selectedIndex != index {
                                 selectedIndex = index

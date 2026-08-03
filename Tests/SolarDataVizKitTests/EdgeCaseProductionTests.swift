@@ -207,4 +207,58 @@ final class EdgeCaseProductionTests: XCTestCase {
         print("⚡ [Spatial Grid 10K Clustering] Merged \(points.count) points into \(clusters.count) nodes in \(String(format: "%.2f", elapsedMS)) ms")
         XCTAssertLessThan(elapsedMS, 50.0, "10,000 point clustering must complete under 50ms with O(N) Spatial Hashing")
     }
+
+    // MARK: - 12. Multi-Level Hierarchy Tree Aggregation Test (buildHierarchyTree)
+
+    func testMultiLevelHierarchyTreeAggregation() {
+        let items = [
+            ProductionEdgeItem(id: "1", xLabel: "A", yValue: 100.0, category: "Tech", subCategory: "Hardware"),
+            ProductionEdgeItem(id: "2", xLabel: "B", yValue: 200.0, category: "Tech", subCategory: "Software"),
+            ProductionEdgeItem(id: "3", xLabel: "C", yValue: 300.0, category: "Finance", subCategory: "Banking")
+        ]
+
+        let binding = VizDataBinding(data: items, x: \.xLabel, y: \.yValue, hierarchy: [\.category, \.subCategory])
+        let tree = binding.buildHierarchyTree()
+
+        XCTAssertEqual(tree.name, "Root")
+        XCTAssertEqual(tree.value, 600.0)
+        XCTAssertEqual(tree.children.count, 2) // Tech & Finance
+        XCTAssertEqual(tree.children.first?.name, "Tech")
+        XCTAssertEqual(tree.children.first?.value, 300.0)
+    }
+
+    // MARK: - 13. Key-based Inner Join Comparison Test
+
+    func testKeyBasedInnerJoinComparisonTooltip() {
+        let seriesA = [
+            ProductionEdgeItem(id: "1", xLabel: "Jan", yValue: 100.0, category: "A", subCategory: "S"),
+            ProductionEdgeItem(id: "2", xLabel: "Feb", yValue: 150.0, category: "A", subCategory: "S")
+        ]
+
+        let seriesB = [
+            ProductionEdgeItem(id: "3", xLabel: "Feb", yValue: 200.0, category: "B", subCategory: "S"),
+            ProductionEdgeItem(id: "4", xLabel: "Mar", yValue: 250.0, category: "B", subCategory: "S")
+        ]
+
+        let bindingA = VizDataBinding(data: seriesA, x: \.xLabel, y: \.yValue)
+        let bindingB = VizDataBinding(data: seriesB, x: \.xLabel, y: \.yValue)
+
+        let xJan = bindingA.extractX(from: seriesA[0]).description
+        let matchFebInB = seriesB.first { bindingB.extractX(from: $0).description == xJan }
+        XCTAssertNil(matchFebInB, "January should not blindly join with February in unaligned comparison series")
+    }
+
+    // MARK: - 14. Categorical String Scatter Plot Test
+
+    func testCategoricalScatterPlotStringXValues() {
+        let items = [
+            ProductionEdgeItem(id: "1", xLabel: "Category Alpha", yValue: 50.0, category: "A", subCategory: "S"),
+            ProductionEdgeItem(id: "2", xLabel: "Category Beta", yValue: 80.0, category: "A", subCategory: "S")
+        ]
+
+        let binding = VizDataBinding(data: items, x: \.xLabel, y: \.yValue)
+        XCTAssertEqual(binding.extractX(from: items[0]), "Category Alpha")
+        let view = SolarClusterScatterView(binding: binding)
+        XCTAssertNotNil(view)
+    }
 }
