@@ -115,6 +115,7 @@ public struct SolarTreeMapView<
         guard totalValue > 0 else { return [] }
 
         let sorted = binding.data.map { (item: $0, val: max(0.0, Double(binding.extractY(from: $0)))) }
+            .filter { $0.val > 0.0 }
             .sorted { $0.val > $1.val }
 
         var tiles: [TreeTile<Item>] = []

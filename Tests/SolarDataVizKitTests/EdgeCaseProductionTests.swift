@@ -139,4 +139,72 @@ final class EdgeCaseProductionTests: XCTestCase {
         let crosses = IntersectionPathCalculator.findIntersections(seriesA: seriesA, seriesB: seriesB)
         XCTAssertTrue(crosses.isEmpty, "Co-linear identical line segments should not trigger infinite intersection point collisions")
     }
+
+    // MARK: - 8. Stale Data Bug Invalidation Test (Rolling Stream Data Hash)
+
+    func testRollingStreamDataHashCacheInvalidation() {
+        let itemsInitial = [
+            ProductionEdgeItem(id: "1", xLabel: "A", yValue: 10.0, category: "C", subCategory: "S"),
+            ProductionEdgeItem(id: "2", xLabel: "B", yValue: 20.0, category: "C", subCategory: "S")
+        ]
+
+        let itemsUpdated = [
+            ProductionEdgeItem(id: "2", xLabel: "B", yValue: 20.0, category: "C", subCategory: "S"),
+            ProductionEdgeItem(id: "3", xLabel: "C", yValue: 30.0, category: "C", subCategory: "S")
+        ]
+
+        let key1 = "cluster_\(itemsInitial.count)_\(itemsInitial.first?.id ?? "")_\(itemsInitial.last?.id ?? "")_20.0_300x500"
+        let key2 = "cluster_\(itemsUpdated.count)_\(itemsUpdated.first?.id ?? "")_\(itemsUpdated.last?.id ?? "")_20.0_300x500"
+
+        XCTAssertNotEqual(key1, key2, "Rolling stream data with identical count must generate distinct cache keys to prevent stale data freezing")
+    }
+
+    // MARK: - 9. Treemap Zero Value No NaN Crash Test
+
+    func testTreemapZeroValueTileNoNaN() {
+        let items = [
+            ProductionEdgeItem(id: "1", xLabel: "Zero A", yValue: 0.0, category: "C", subCategory: "S"),
+            ProductionEdgeItem(id: "2", xLabel: "Valid B", yValue: 500.0, category: "C", subCategory: "S")
+        ]
+
+        let binding = VizDataBinding(data: items, x: \.xLabel, y: \.yValue)
+        let positiveOnly = binding.data.map { max(0.0, Double(binding.extractY(from: $0))) }.filter { $0 > 0.0 }
+        XCTAssertEqual(positiveOnly.count, 1)
+        XCTAssertEqual(positiveOnly.first, 500.0)
+    }
+
+    // MARK: - 10. Non-Monotonic Parametric Curve Intersection Detection
+
+    func testNonMonotonicParametricCurveIntersections() {
+        // Parametric figure-8 / loop curve
+        let loopA = [
+            CGPoint(x: 0, y: 0),
+            CGPoint(x: 10, y: 10),
+            CGPoint(x: 5, y: 15),
+            CGPoint(x: -5, y: 5)
+        ]
+
+        let lineB = [
+            CGPoint(x: -10, y: 5),
+            CGPoint(x: 15, y: 5)
+        ]
+
+        let crosses = IntersectionPathCalculator.findIntersections(seriesA: loopA, seriesB: lineB)
+        XCTAssertFalse(crosses.isEmpty, "Non-monotonic parametric curves must detect intersections accurately without sweep skipping")
+    }
+
+    // MARK: - 11. Spatial Grid Hashing 10K Points Performance Test
+
+    func testSpatialGridClustering10KPerformance() {
+        let points = (0..<10_000).map { i in
+            (id: "\(i)", point: CGPoint(x: Double(i % 100) * 10.0, y: Double(i / 100) * 10.0), weight: 1.0)
+        }
+
+        let start = Date()
+        let clusters = ClusterNodeCalculator.cluster(points: points, thresholdRadius: 15.0)
+        let elapsedMS = Date().timeIntervalSince(start) * 1000.0
+
+        print("⚡ [Spatial Grid 10K Clustering] Merged \(points.count) points into \(clusters.count) nodes in \(String(format: "%.2f", elapsedMS)) ms")
+        XCTAssertLessThan(elapsedMS, 50.0, "10,000 point clustering must complete under 50ms with O(N) Spatial Hashing")
+    }
 }

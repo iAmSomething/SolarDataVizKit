@@ -87,31 +87,41 @@ public struct IntersectionPathCalculator: Sendable {
         guard seriesA.count >= 2, seriesB.count >= 2 else { return [] }
         var result: [IntersectionPoint] = []
 
+        // Check if both series are monotonically increasing on X-axis
+        let isMonotonicA = zip(seriesA, seriesA.dropFirst()).allSatisfy { $0.x <= $1.x }
+        let isMonotonicB = zip(seriesB, seriesB.dropFirst()).allSatisfy { $0.x <= $1.x }
+        let isMonotonic = isMonotonicA && isMonotonicB
+
         var startJ = 0
         for i in 0..<(seriesA.count - 1) {
             let a1 = seriesA[i]
             let a2 = seriesA[i + 1]
             let minAx = min(a1.x, a2.x)
             let maxAx = max(a1.x, a2.x)
+            let minAy = min(a1.y, a2.y)
+            let maxAy = max(a1.y, a2.y)
 
-            // Advance startJ to prune B segments completely to the left of A segment (O(N) sweep)
-            while startJ < (seriesB.count - 1) && max(seriesB[startJ].x, seriesB[startJ + 1].x) < minAx {
-                startJ += 1
+            if isMonotonic {
+                while startJ < (seriesB.count - 1) && max(seriesB[startJ].x, seriesB[startJ + 1].x) < minAx {
+                    startJ += 1
+                }
             }
 
-            for j in startJ..<(seriesB.count - 1) {
+            let initialJ = isMonotonic ? startJ : 0
+            for j in initialJ..<(seriesB.count - 1) {
                 let b1 = seriesB[j]
                 let b2 = seriesB[j + 1]
                 let minBx = min(b1.x, b2.x)
                 let maxBx = max(b1.x, b2.x)
+                let minBy = min(b1.y, b2.y)
+                let maxBy = max(b1.y, b2.y)
 
-                // Early exit: B segment is completely to the right of A segment
-                if minBx > maxAx {
+                if isMonotonic && minBx > maxAx {
                     break
                 }
 
-                // Fast X-bounding box overlap check before doing matrix determinant floating-point math
-                if !(maxAx < minBx || minAx > maxBx) {
+                // 2D X/Y Bounding box overlap check before doing floating point matrix math
+                if !(maxAx < minBx || minAx > maxBx || maxAy < minBy || minAy > maxBy) {
                     if let intersection = lineSegmentIntersection(p1: a1, p2: a2, p3: b1, p4: b2) {
                         result.append(IntersectionPoint(point: intersection, indexA: i, indexB: j))
                     }

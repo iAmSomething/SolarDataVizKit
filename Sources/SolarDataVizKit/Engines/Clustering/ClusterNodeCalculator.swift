@@ -62,11 +62,29 @@ public struct ClusterNodeCalculator: Sendable {
     ///   - points: (id, point, weight) 튜플 배열
     ///   - thresholdRadius: 노드가 합쳐질 유클리드 거리 임계값
     /// - Returns: 군집화된 `ClusterNode` 배열
+    /// 2차원 공간 분할 격자(Spatial Grid Binning) 알고리즘으로 O(N) 공간 해싱 클러스터링을 수행합니다.
     public static func cluster(
         points: [(id: String, point: CGPoint, weight: Double)],
         thresholdRadius: CGFloat
     ) -> [ClusterNode] {
         guard !points.isEmpty else { return [] }
+        let cellSize = max(thresholdRadius, 10.0)
+
+        // 1. Build Spatial Grid Bucket Map: (gridX, gridY) -> [indices]
+        struct GridKey: Hashable {
+            let x: Int
+            let y: Int
+        }
+
+        var grid: [GridKey: [Int]] = [:]
+        grid.reserveCapacity(points.count)
+
+        for (idx, p) in points.enumerated() {
+            let gx = Int(floor(p.point.x / cellSize))
+            let gy = Int(floor(p.point.y / cellSize))
+            grid[GridKey(x: gx, y: gy), default: []].append(idx)
+        }
+
         var visited = Set<String>()
         var resultNodes: [ClusterNode] = []
 
@@ -77,14 +95,25 @@ public struct ClusterNodeCalculator: Sendable {
             var clusterPoints = [current]
             visited.insert(current.id)
 
-            for j in (i + 1)..<points.count {
-                let neighbor = points[j]
-                if visited.contains(neighbor.id) { continue }
+            let gx = Int(floor(current.point.x / cellSize))
+            let gy = Int(floor(current.point.y / cellSize))
 
-                let dist = distance(from: current.point, to: neighbor.point)
-                if dist <= thresholdRadius {
-                    clusterPoints.append(neighbor)
-                    visited.insert(neighbor.id)
+            // Check only 3x3 neighboring grid cells (O(1) candidates)
+            for dx in -1...1 {
+                for dy in -1...1 {
+                    let neighborKey = GridKey(x: gx + dx, y: gy + dy)
+                    guard let candidateIndices = grid[neighborKey] else { continue }
+
+                    for jIdx in candidateIndices {
+                        let neighbor = points[jIdx]
+                        if visited.contains(neighbor.id) { continue }
+
+                        let dist = distance(from: current.point, to: neighbor.point)
+                        if dist <= thresholdRadius {
+                            clusterPoints.append(neighbor)
+                            visited.insert(neighbor.id)
+                        }
+                    }
                 }
             }
 

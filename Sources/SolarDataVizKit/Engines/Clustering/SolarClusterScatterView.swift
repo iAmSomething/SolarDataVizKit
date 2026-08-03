@@ -85,7 +85,7 @@ public struct SolarClusterScatterView<
                 }
                 previousClusterCount = newCount
             }
-            .task(id: "\(binding.data.count)_\(clusterRadiusThreshold)_\(size.width)x\(size.height)") {
+            .task(id: "\(binding.data.count)_\(binding.data.first.map { String(describing: $0.id) } ?? "")_\(binding.data.last.map { String(describing: $0.id) } ?? "")_\(clusterRadiusThreshold)_\(size.width)x\(size.height)") {
                 await updateClustersOffMainThread(size: size)
             }
         }
@@ -105,7 +105,9 @@ public struct SolarClusterScatterView<
     private func updateClustersOffMainThread(size: CGSize) async {
         guard size.width > 0, size.height > 0 else { return }
 
-        let cacheKey = "cluster_\(binding.data.count)_\(clusterRadiusThreshold)_\(Int(size.width))x\(Int(size.height))"
+        let firstID = binding.data.first.map { String(describing: $0.id) } ?? ""
+        let lastID = binding.data.last.map { String(describing: $0.id) } ?? ""
+        let cacheKey = "cluster_\(binding.data.count)_\(firstID)_\(lastID)_\(clusterRadiusThreshold)_\(Int(size.width))x\(Int(size.height))"
         if let cached = SolarVizLayoutCache.shared.getClusterNodes(forKey: cacheKey) {
             self.nodes = cached
             return
