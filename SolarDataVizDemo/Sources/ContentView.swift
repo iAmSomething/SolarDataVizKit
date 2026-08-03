@@ -54,8 +54,15 @@ struct ContentView: View {
         "8. Squarified TreeMap Hierarchy",
         "9. Concentric Sunburst Donut",
         "10. Slice & Dice TreeMap Layout",
-        "11. UIKit Hosting Wrapper"
+        "11. UIKit Hosting Wrapper",
+        "12. Bayesian Numerical Trend & Uncertainty Band"
     ]
+
+    var bayesianTrendData: [SolarDefaultDataPoint] {
+        let xs = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
+        let ys = [12.0, 19.0, 22.0, 35.0, 41.0, 50.0, 58.0, 69.0, 75.0, 91.0]
+        return xs.indices.map { SolarDefaultDataPoint(xLabel: String(xs[$0]), value: ys[$0]) }
+    }
 
     var groupedComparisonData: [SolarDefaultDataPoint] {
         let rev = [40.0, 55.0, 65.0, 80.0, 75.0, 95.0, 110.0, 105.0, 125.0, 140.0]
@@ -299,12 +306,21 @@ struct ContentView: View {
                             )
                         }
                         .padding(16)
-                    default:
+                    case 10:
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Engine 11: UIKit UIViewController Hosting Wrapper")
                                 .font(.headline).foregroundColor(.white)
                             SolarTreeMapView(
                                 binding: VizDataBinding(data: hierarchyItems, x: \.xLabel, y: \.value)
+                            )
+                        }
+                        .padding(16)
+                    default:
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Engine 12: Bayesian Numerical Trend & Uncertainty Band")
+                                .font(.headline).foregroundColor(.white)
+                            SolarBayesianTrendView(
+                                binding: VizDataBinding(data: bayesianTrendData, x: \.value, y: \.value)
                             )
                         }
                         .padding(16)

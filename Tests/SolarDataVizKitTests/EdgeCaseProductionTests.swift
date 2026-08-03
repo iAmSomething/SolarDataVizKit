@@ -779,4 +779,40 @@ final class EdgeCaseProductionTests: XCTestCase {
 
         XCTAssertLessThan(elapsedMs, 5.0, "1,000 SwiftUI View initializations must execute in under 5ms (Zero-Cost init)")
     }
+
+    // MARK: - 40. Bayesian Trend Engine: Confidence Interval Bounds Test
+
+    func testBayesianTrendConfidenceIntervalBounds() {
+        let samplePoints = [
+            CGPoint(x: 1.0, y: 10.0),
+            CGPoint(x: 2.0, y: 15.0),
+            CGPoint(x: 3.0, y: 18.0),
+            CGPoint(x: 4.0, y: 24.0),
+            CGPoint(x: 5.0, y: 30.0)
+        ]
+
+        let trend = BayesianTrendCalculator.computeTrend(points: samplePoints, sampleCount: 50)
+        XCTAssertEqual(trend.count, 50)
+
+        for pt in trend {
+            XCTAssertGreaterThanOrEqual(pt.upperLimit, pt.mean, "Upper limit must be >= mean")
+            XCTAssertLessThanOrEqual(pt.lowerLimit, pt.mean, "Lower limit must be <= mean")
+            XCTAssertGreaterThan(pt.stdDev, 0.0, "Standard deviation must be strictly positive")
+        }
+    }
+
+    // MARK: - 41. Bayesian Trend Engine: 10,000 Points Performance Test
+
+    func testBayesianTrend10KPointsPerformance() {
+        let samplePoints = (0..<10000).map { i in
+            CGPoint(x: CGFloat(i), y: CGFloat(i * 2 + (i % 5)))
+        }
+
+        let startTime = CFAbsoluteTimeGetCurrent()
+        let trend = BayesianTrendCalculator.computeTrend(points: samplePoints, sampleCount: 100)
+        let elapsedMs = (CFAbsoluteTimeGetCurrent() - startTime) * 1000.0
+
+        XCTAssertEqual(trend.count, 100)
+        XCTAssertLessThan(elapsedMs, 30.0, "10,000 point Bayesian trend computation must finish under 30ms")
+    }
 }
