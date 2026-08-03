@@ -1,0 +1,11 @@
+# macOS / Xcode / SwiftPM GitIgnore
+.DS_Store
+/.build/
+/.swiftpm/
+DerivedData/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.ipa
+*.dSYM.zip
+*.dSYM
+Package.resolved

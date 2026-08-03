@@ -1,0 +1,203 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		110000012A34567800000001 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110000022A34567800000001 /* ContentView.swift */; };
+		110000032A34567800000001 /* SolarDataVizKit in Frameworks */ = {isa = PBXBuildFile; productRef = 110000042A34567800000001 /* SolarDataVizKit */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		110000022A34567800000001 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		110000052A34567800000001 /* SolarDataVizDemo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SolarDataVizDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		110000062A34567800000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				110000032A34567800000001 /* SolarDataVizKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		110000072A34567800000001 = {
+			isa = PBXGroup;
+			children = (
+				110000082A34567800000001 /* Sources */,
+				110000092A34567800000001 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		110000082A34567800000001 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				110000022A34567800000001 /* ContentView.swift */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		110000092A34567800000001 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				110000052A34567800000001 /* SolarDataVizDemo.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		1100000A2A34567800000001 /* SolarDataVizDemo */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1100000B2A34567800000001 /* Build configuration list for PBXNativeTarget "SolarDataVizDemo" */;
+			buildPhases = (
+				1100000C2A34567800000001 /* Sources */,
+				110000062A34567800000001 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SolarDataVizDemo;
+			packageProductDependencies = (
+				110000042A34567800000001 /* SolarDataVizKit */,
+			);
+			productName = SolarDataVizDemo;
+			productReference = 110000052A34567800000001 /* SolarDataVizDemo.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		1100000D2A34567800000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					1100000A2A34567800000001 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = 1100000E2A34567800000001 /* Build configuration list for PBXProject "SolarDataVizDemo" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 110000072A34567800000001;
+			packageReferences = (
+				1100000F2A34567800000001 /* XCLocalSwiftPackageReference */,
+			);
+			productRefGroup = 110000092A34567800000001 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				1100000A2A34567800000001 /* SolarDataVizDemo */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		1100000C2A34567800000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				110000012A34567800000001 /* ContentView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		110000102A34567800000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.solarkits.SolarDataVizDemo;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		110000112A34567800000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.solarkits.SolarDataVizDemo;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1100000B2A34567800000001 /* Build configuration list for PBXNativeTarget "SolarDataVizDemo" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				110000102A34567800000001 /* Debug */,
+				110000112A34567800000001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1100000E2A34567800000001 /* Build configuration list for PBXProject "SolarDataVizDemo" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				110000102A34567800000001 /* Debug */,
+				110000112A34567800000001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		1100000F2A34567800000001 /* XCLocalSwiftPackageReference */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "..";
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin CSCSwiftPackageProductDependency section */
+		110000042A34567800000001 /* SolarDataVizKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1100000F2A34567800000001 /* XCLocalSwiftPackageReference */;
+			productName = SolarDataVizKit;
+		};
+/* End CSCSwiftPackageProductDependency section */
+
+	};
+	rootObject = 1100000D2A34567800000001 /* Project object */;
+}
