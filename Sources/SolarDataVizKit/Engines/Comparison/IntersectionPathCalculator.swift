@@ -154,6 +154,48 @@ public struct IntersectionPathCalculator: Sendable {
         return nil
     }
 
+    /// 두 데이터 시리즈의 X-좌표를 정렬하고 결측 구간을 선형 보간(Linear Interpolation)하여 1:1로 키 동기화합니다.
+    public static func alignSeries(seriesA: [CGPoint], seriesB: [CGPoint]) -> ([CGPoint], [CGPoint]) {
+        guard !seriesA.isEmpty, !seriesB.isEmpty else { return ([], []) }
+
+        var xSet = Set<CGFloat>()
+        for p in seriesA { xSet.insert(p.x) }
+        for p in seriesB { xSet.insert(p.x) }
+        let sortedX = xSet.sorted()
+
+        func interpolateY(for x: CGFloat, in series: [CGPoint]) -> CGFloat {
+            if let exact = series.first(where: { abs($0.x - x) < 1e-6 }) {
+                return exact.y
+            }
+            if x <= series.first!.x { return series.first!.y }
+            if x >= series.last!.x { return series.last!.y }
+
+            for i in 0..<(series.count - 1) {
+                let p1 = series[i]
+                let p2 = series[i + 1]
+                if x >= min(p1.x, p2.x) && x <= max(p1.x, p2.x) {
+                    let dx = p2.x - p1.x
+                    guard abs(dx) > 1e-6 else { return p1.y }
+                    let t = (x - p1.x) / dx
+                    return p1.y + t * (p2.y - p1.y)
+                }
+            }
+            return series.last!.y
+        }
+
+        var alignedA: [CGPoint] = []
+        var alignedB: [CGPoint] = []
+
+        for x in sortedX {
+            let yA = interpolateY(for: x, in: seriesA)
+            let yB = interpolateY(for: x, in: seriesB)
+            alignedA.append(CGPoint(x: x, y: yA))
+            alignedB.append(CGPoint(x: x, y: yB))
+        }
+
+        return (alignedA, alignedB)
+    }
+
     /// 교차점들을 기준으로 두 데이터 시리즈 사이의 구분 영역(Regions)을 생성합니다.
     ///
     /// - Parameters:
@@ -161,21 +203,22 @@ public struct IntersectionPathCalculator: Sendable {
     ///   - seriesB: 시리즈 B 좌표 배열
     /// - Returns: 닫힌 영역 `IntersectionRegion` 배열
     public static func computeRegions(seriesA: [CGPoint], seriesB: [CGPoint]) -> [IntersectionRegion] {
-        guard seriesA.count > 1, seriesA.count == seriesB.count else { return [] }
+        let (alignedA, alignedB) = alignSeries(seriesA: seriesA, seriesB: seriesB)
+        guard alignedA.count > 1 else { return [] }
         var regions: [IntersectionRegion] = []
 
         var currentA: [CGPoint] = []
         var currentB: [CGPoint] = []
         var currentIsASuperior: Bool?
 
-        for i in 0..<seriesA.count {
-            let ptA = seriesA[i]
-            let ptB = seriesB[i]
+        for i in 0..<alignedA.count {
+            let ptA = alignedA[i]
+            let ptB = alignedB[i]
             let isASuperiorNow = ptA.y <= ptB.y
 
             if let isASuperior = currentIsASuperior, isASuperior != isASuperiorNow {
-                let prevA = seriesA[i - 1]
-                let prevB = seriesB[i - 1]
+                let prevA = alignedA[i - 1]
+                let prevB = alignedB[i - 1]
                 if let cross = lineSegmentIntersection(p1: prevA, p2: ptA, p3: prevB, p4: ptB) {
                     currentA.append(cross)
                     currentB.append(cross)

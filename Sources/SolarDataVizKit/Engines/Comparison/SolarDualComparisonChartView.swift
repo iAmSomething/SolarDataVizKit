@@ -13,6 +13,7 @@ public struct SolarDualComparisonChartView<
     public let bindingB: VizDataBinding<ItemB, XValue, YValue>
     public let labelA: String
     public let labelB: String
+    private let cachedDictB: [String: ItemB]
 
     @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
     @State private var selectedIndex: Int?
@@ -27,6 +28,13 @@ public struct SolarDualComparisonChartView<
         self.bindingB = bindingB
         self.labelA = labelA
         self.labelB = labelB
+
+        var dict: [String: ItemB] = [:]
+        for item in bindingB.data {
+            let key = bindingB.extractX(from: item).description
+            dict[key] = item
+        }
+        self.cachedDictB = dict
     }
 
     public var body: some View {
@@ -68,9 +76,9 @@ public struct SolarDualComparisonChartView<
                                 x: .value("X", xVal.description),
                                 y: .value("Y", Double(yVal))
                             )
+                            .foregroundStyle(by: .value("Series", labelA))
+                            .lineStyle(StrokeStyle(lineWidth: 3))
                         }
-                        .foregroundStyle(theme.seriesColors.first ?? theme.accentColor)
-                        .lineStyle(StrokeStyle(lineWidth: 3))
 
                         ForEach(bindingB.data) { item in
                             let xVal = bindingB.extractX(from: item)
@@ -80,7 +88,7 @@ public struct SolarDualComparisonChartView<
                                 x: .value("X", xVal.description),
                                 y: .value("Y", Double(yVal))
                             )
-                            .foregroundStyle(theme.seriesColors.dropFirst().first ?? Color.blue)
+                            .foregroundStyle(by: .value("Series", labelB))
                             .lineStyle(StrokeStyle(lineWidth: 2.5, dash: [4, 4]))
                         }
 
@@ -93,6 +101,11 @@ public struct SolarDualComparisonChartView<
                                 .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
                         }
                     }
+                    .chartForegroundStyleScale([
+                        labelA: theme.seriesColors.first ?? theme.accentColor,
+                        labelB: theme.seriesColors.dropFirst().first ?? Color.blue
+                    ])
+                    .chartLegend(.hidden)
                     .chartYAxis {
                         AxisMarks(position: .leading) {
                             AxisGridLine(stroke: StrokeStyle(lineWidth: theme.gridLineWidth, dash: [2, 2]))
@@ -116,8 +129,15 @@ public struct SolarDualComparisonChartView<
                         let xKeyA = bindingA.extractX(from: itemA).description
                         let valA = Double(bindingA.extractY(from: itemA))
 
-                        let matchingItemB = bindingB.data.first { bindingB.extractX(from: $0).description == xKeyA }
+                        // Fast O(1) Dictionary Lookup
+                        let matchingItemB = cachedDictB[xKeyA]
                         let valB = matchingItemB != nil ? Double(bindingB.extractY(from: matchingItemB!)) : valA
+
+                        let totalCount = max(bindingA.data.count, 1)
+                        let progress = CGFloat(selectedIndex) / CGFloat(max(totalCount - 1, 1))
+                        let targetX = containerWidth * progress
+                        let tooltipWidth: CGFloat = 160.0
+                        let clampedX = min(max(targetX - tooltipWidth / 2, 0), containerWidth - tooltipWidth)
 
                         DeltaTooltipOverlay(
                             xLabel: xKeyA,
@@ -127,6 +147,7 @@ public struct SolarDualComparisonChartView<
                             labelB: labelB,
                             theme: theme
                         )
+                        .offset(x: clampedX, y: 0)
                         .transition(.opacity.combined(with: .scale(scale: 0.95)))
                         .padding(12)
                     }

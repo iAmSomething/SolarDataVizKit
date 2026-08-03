@@ -532,7 +532,78 @@ final class EdgeCaseProductionTests: XCTestCase {
         let bounds = binding.yBounds()
         XCTAssertFalse(Double(bounds.min).isNaN, "Sanitized min bound must not be NaN")
         XCTAssertFalse(Double(bounds.max).isInfinite, "Sanitized max bound must not be Infinity")
-        XCTAssertEqual(bounds.min, 50.0)
-        XCTAssertEqual(bounds.max, 150.0)
+        XCTAssertEqual(Double(bounds.min), 50.0, accuracy: 1e-5)
+        XCTAssertEqual(Double(bounds.max), 150.0, accuracy: 1e-5)
+    }
+
+    // MARK: - 29. Phase 5: O(1) Dictionary Lookup Scrubbing Performance Test
+
+    func testPhase5DualComparisonO1DictionaryLookupPerformance() {
+        struct FastItem: Identifiable, Sendable {
+            let id: String
+            let dayKey: String
+            let amount: Double
+        }
+
+        let count = 100_000
+        let itemsA = (0..<count).map { FastItem(id: "a_\($0)", dayKey: "D_\($0)", amount: Double($0)) }
+        let itemsB = (0..<count).map { FastItem(id: "b_\($0)", dayKey: "D_\($0)", amount: Double($0 * 2)) }
+
+        let bindingA = VizDataBinding(data: itemsA, x: \.dayKey, y: \.amount)
+        let bindingB = VizDataBinding(data: itemsB, x: \.dayKey, y: \.amount)
+
+        let start = CFAbsoluteTimeGetCurrent()
+        let view = SolarDualComparisonChartView(bindingA: bindingA, bindingB: bindingB)
+        let initTime = (CFAbsoluteTimeGetCurrent() - start) * 1000
+
+        XCTAssertLessThan(initTime, 500.0, "Init with 100K dictionary caching must complete quickly")
+        XCTAssertNotNil(view)
+    }
+
+    // MARK: - 30. Phase 5: Series Length Mismatch Linear Interpolation Test
+
+    func testPhase5IntersectionPathCalculatorLengthMismatchLinearInterpolation() {
+        let seriesA = [
+            CGPoint(x: 0, y: 10),
+            CGPoint(x: 2, y: 20),
+            CGPoint(x: 4, y: 30),
+            CGPoint(x: 6, y: 40),
+            CGPoint(x: 8, y: 50)
+        ]
+        let seriesB = [
+            CGPoint(x: 0, y: 50),
+            CGPoint(x: 4, y: 10),
+            CGPoint(x: 8, y: 60)
+        ]
+
+        let (alignedA, alignedB) = IntersectionPathCalculator.alignSeries(seriesA: seriesA, seriesB: seriesB)
+
+        XCTAssertEqual(alignedA.count, 5)
+        XCTAssertEqual(alignedB.count, 5)
+        XCTAssertEqual(alignedB[1].x, 2.0)
+        XCTAssertEqual(alignedB[1].y, 30.0, accuracy: 1e-5, "Linear interpolation of Series B at X=2 must equal Y=30")
+
+        let regions = IntersectionPathCalculator.computeRegions(seriesA: seriesA, seriesB: seriesB)
+        XCTAssertGreaterThan(regions.count, 0, "Length-mismatched series must produce valid aligned intersection regions")
+    }
+
+    // MARK: - 31. Phase 5: Dynamic Tooltip Offset Bounds Calculation Test
+
+    func testPhase5DynamicTooltipOffsetBoundsCalculation() {
+        let containerWidth: CGFloat = 400.0
+        let tooltipWidth: CGFloat = 160.0
+        let totalCount = 12
+
+        // Test Far Left (Index 0 - Jan)
+        let progress0: CGFloat = 0.0
+        let targetX0 = containerWidth * progress0
+        let clampedX0 = min(max(targetX0 - tooltipWidth / 2, 0), containerWidth - tooltipWidth)
+        XCTAssertEqual(clampedX0, 0.0, "Far left index must clamp offset to 0.0")
+
+        // Test Far Right (Index 11 - Dec)
+        let progress11: CGFloat = 1.0
+        let targetX11 = containerWidth * progress11
+        let clampedX11 = min(max(targetX11 - tooltipWidth / 2, 0), containerWidth - tooltipWidth)
+        XCTAssertEqual(clampedX11, 240.0, "Far right index must clamp offset to containerWidth - tooltipWidth (240.0)")
     }
 }

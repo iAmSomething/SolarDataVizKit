@@ -29,6 +29,7 @@ public struct SolarComparisonChartView<
     public let seriesB: String
     private let cachedItemsA: [Item]
     private let cachedItemsB: [Item]
+    private let cachedDictB: [String: Item]
 
     @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
     @State private var selectedIndex: Int?
@@ -45,8 +46,18 @@ public struct SolarComparisonChartView<
 
         // Cache grouped items once during init to prevent 60Hz main-thread re-grouping on body re-evaluations
         let groups = binding.sortedGroupedData()
-        self.cachedItemsA = groups.first(where: { $0.key == seriesA })?.items ?? groups.first?.items ?? []
-        self.cachedItemsB = groups.first(where: { $0.key == seriesB })?.items ?? groups.dropFirst().first?.items ?? []
+        let itemsA = groups.first(where: { $0.key == seriesA })?.items ?? groups.first?.items ?? []
+        let itemsB = groups.first(where: { $0.key == seriesB })?.items ?? groups.dropFirst().first?.items ?? []
+
+        self.cachedItemsA = itemsA
+        self.cachedItemsB = itemsB
+
+        var dict: [String: Item] = [:]
+        for item in itemsB {
+            let key = binding.extractX(from: item).description
+            dict[key] = item
+        }
+        self.cachedDictB = dict
     }
 
     private var itemsA: [Item] { cachedItemsA }
@@ -79,6 +90,8 @@ public struct SolarComparisonChartView<
                             .foregroundColor(theme.primaryTextColor)
                     }
                 }
+                .padding(.horizontal, 4)
+
                 // Main Chart Canvas
                 ZStack(alignment: .topLeading) {
                     let colorA = theme.seriesColors.first ?? theme.accentColor
@@ -149,9 +162,15 @@ public struct SolarComparisonChartView<
                         let xKeyA = binding.extractX(from: itemA).description
                         let valA = Double(binding.extractY(from: itemA))
 
-                        // Match item B by exact X-key equality instead of blind array index matching
-                        let matchingItemB = itemsB.first { binding.extractX(from: $0).description == xKeyA }
+                        // Fast O(1) Dictionary Lookup
+                        let matchingItemB = cachedDictB[xKeyA]
                         let valB = matchingItemB != nil ? Double(binding.extractY(from: matchingItemB!)) : valA
+
+                        let totalCount = max(itemsA.count, 1)
+                        let progress = CGFloat(selectedIndex) / CGFloat(max(totalCount - 1, 1))
+                        let targetX = containerWidth * progress
+                        let tooltipWidth: CGFloat = 160.0
+                        let clampedX = min(max(targetX - tooltipWidth / 2, 0), containerWidth - tooltipWidth)
 
                         DeltaTooltipOverlay(
                             xLabel: xKeyA,

@@ -68,9 +68,14 @@ public struct SolarTreeMapView<
         let tileH = max(tile.rect.height - 4, 1.0)
 
         ZStack {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(color.opacity(isSelected ? 0.95 : 0.75))
-                .shadow(color: isSelected ? color.opacity(0.6) : Color.black.opacity(0.2), radius: isSelected ? 8 : 2)
+            if isSelected {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(color.opacity(0.95))
+                    .shadow(color: color.opacity(0.6), radius: 8)
+            } else {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(color.opacity(0.75))
+            }
 
             VStack(spacing: 4) {
                 Text(titleText)
