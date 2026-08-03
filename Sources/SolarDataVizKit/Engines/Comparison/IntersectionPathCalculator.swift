@@ -154,7 +154,7 @@ public struct IntersectionPathCalculator: Sendable {
         return nil
     }
 
-    /// 두 데이터 시리즈의 X-좌표를 정렬하고 결측 구간을 선형 보간(Linear Interpolation)하여 1:1로 키 동기화합니다.
+    /// 두 데이터 시리즈의 X-좌표를 정렬하고 결측 구간을 선형 보간(Linear Interpolation)하여 1:1로 키 동기화합니다 (O(N) Two-Pointer Scan).
     public static func alignSeries(seriesA: [CGPoint], seriesB: [CGPoint]) -> ([CGPoint], [CGPoint]) {
         guard !seriesA.isEmpty, !seriesB.isEmpty else { return ([], []) }
 
@@ -163,35 +163,54 @@ public struct IntersectionPathCalculator: Sendable {
         for p in seriesB { xSet.insert(p.x) }
         let sortedX = xSet.sorted()
 
-        func interpolateY(for x: CGFloat, in series: [CGPoint]) -> CGFloat {
-            if let exact = series.first(where: { abs($0.x - x) < 1e-6 }) {
-                return exact.y
-            }
-            if x <= series.first!.x { return series.first!.y }
-            if x >= series.last!.x { return series.last!.y }
+        func interpolateSeries(sortedX: [CGFloat], series: [CGPoint]) -> [CGPoint] {
+            guard !series.isEmpty else { return [] }
+            var result: [CGPoint] = []
+            result.reserveCapacity(sortedX.count)
 
-            for i in 0..<(series.count - 1) {
-                let p1 = series[i]
-                let p2 = series[i + 1]
-                if x >= min(p1.x, p2.x) && x <= max(p1.x, p2.x) {
-                    let dx = p2.x - p1.x
-                    guard abs(dx) > 1e-6 else { return p1.y }
-                    let t = (x - p1.x) / dx
-                    return p1.y + t * (p2.y - p1.y)
+            let firstX = series.first!.x
+            let lastX = series.last!.x
+            let firstY = series.first!.y
+            let lastY = series.last!.y
+            let count = series.count
+            var ptr = 0
+
+            for x in sortedX {
+                if x <= firstX {
+                    result.append(CGPoint(x: x, y: firstY))
+                    continue
+                }
+                if x >= lastX {
+                    result.append(CGPoint(x: x, y: lastY))
+                    continue
+                }
+
+                while ptr < count - 1 && series[ptr + 1].x < x - 1e-6 {
+                    ptr += 1
+                }
+
+                let p1 = series[ptr]
+                if abs(p1.x - x) < 1e-6 {
+                    result.append(CGPoint(x: x, y: p1.y))
+                } else if ptr + 1 < count {
+                    let p2 = series[ptr + 1]
+                    if abs(p2.x - x) < 1e-6 {
+                        result.append(CGPoint(x: x, y: p2.y))
+                    } else {
+                        let dx = p2.x - p1.x
+                        let t = abs(dx) > 1e-6 ? (x - p1.x) / dx : 0.0
+                        let y = p1.y + t * (p2.y - p1.y)
+                        result.append(CGPoint(x: x, y: y))
+                    }
+                } else {
+                    result.append(CGPoint(x: x, y: p1.y))
                 }
             }
-            return series.last!.y
+            return result
         }
 
-        var alignedA: [CGPoint] = []
-        var alignedB: [CGPoint] = []
-
-        for x in sortedX {
-            let yA = interpolateY(for: x, in: seriesA)
-            let yB = interpolateY(for: x, in: seriesB)
-            alignedA.append(CGPoint(x: x, y: yA))
-            alignedB.append(CGPoint(x: x, y: yB))
-        }
+        let alignedA = interpolateSeries(sortedX: sortedX, series: seriesA)
+        let alignedB = interpolateSeries(sortedX: sortedX, series: seriesB)
 
         return (alignedA, alignedB)
     }

@@ -13,7 +13,14 @@ public struct SolarDualComparisonChartView<
     public let bindingB: VizDataBinding<ItemB, XValue, YValue>
     public let labelA: String
     public let labelB: String
-    private let cachedDictB: [String: ItemB]
+    private var cachedDictB: [String: ItemB] {
+        var dict: [String: ItemB] = [:]
+        for item in bindingB.data {
+            let key = bindingB.extractX(from: item).description
+            dict[key] = item
+        }
+        return dict
+    }
 
     @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
     @State private var selectedIndex: Int?
@@ -28,13 +35,6 @@ public struct SolarDualComparisonChartView<
         self.bindingB = bindingB
         self.labelA = labelA
         self.labelB = labelB
-
-        var dict: [String: ItemB] = [:]
-        for item in bindingB.data {
-            let key = bindingB.extractX(from: item).description
-            dict[key] = item
-        }
-        self.cachedDictB = dict
     }
 
     public var body: some View {

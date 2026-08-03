@@ -748,4 +748,35 @@ final class EdgeCaseProductionTests: XCTestCase {
 
         XCTAssertNotEqual(hashA, hashB, "Mutating mid-array element Y value must produce distinct dataHash triggering reactive task updates")
     }
+
+    // MARK: - 38. Phase 8: O(N) Two-Pointer Interpolation Performance Test (10,000 Points)
+
+    func testPhase8TwoPointerInterpolationPerformance() {
+        let seriesA = (0..<10000).map { CGPoint(x: CGFloat($0), y: CGFloat($0 * 2)) }
+        let seriesB = (0..<10000).map { CGPoint(x: CGFloat($0) + 0.5, y: CGFloat($0 * 3)) }
+
+        let startTime = CFAbsoluteTimeGetCurrent()
+        let (alignedA, alignedB) = IntersectionPathCalculator.alignSeries(seriesA: seriesA, seriesB: seriesB)
+        let elapsedMs = (CFAbsoluteTimeGetCurrent() - startTime) * 1000.0
+
+        XCTAssertEqual(alignedA.count, 20000)
+        XCTAssertEqual(alignedB.count, 20000)
+        XCTAssertLessThan(elapsedMs, 60.0, "O(N) Two-pointer interpolation scan must align 20K points in under 60ms in debug mode")
+    }
+
+    // MARK: - 39. Phase 8: Zero-Cost SwiftUI View Init Benchmark (1,000 Inits)
+
+    @MainActor
+    func testPhase8ZeroCostInitReRenderPerformance() {
+        let items = (0..<1000).map { SolarDefaultDataPoint(xLabel: "M\($0)", value: Double($0)) }
+        let binding = VizDataBinding(data: items, x: \.xLabel, y: \.value)
+
+        let startTime = CFAbsoluteTimeGetCurrent()
+        for _ in 0..<1000 {
+            _ = SolarComparisonChartView(binding: binding)
+        }
+        let elapsedMs = (CFAbsoluteTimeGetCurrent() - startTime) * 1000.0
+
+        XCTAssertLessThan(elapsedMs, 5.0, "1,000 SwiftUI View initializations must execute in under 5ms (Zero-Cost init)")
+    }
 }

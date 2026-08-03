@@ -27,9 +27,24 @@ public struct SolarComparisonChartView<
     public let binding: VizDataBinding<Item, XValue, YValue>
     public let seriesA: String
     public let seriesB: String
-    private let cachedItemsA: [Item]
-    private let cachedItemsB: [Item]
-    private let cachedDictB: [String: Item]
+    private var itemsA: [Item] {
+        let groups = binding.sortedGroupedData()
+        return groups.first(where: { $0.key == seriesA })?.items ?? groups.first?.items ?? []
+    }
+
+    private var itemsB: [Item] {
+        let groups = binding.sortedGroupedData()
+        return groups.first(where: { $0.key == seriesB })?.items ?? groups.dropFirst().first?.items ?? []
+    }
+
+    private var cachedDictB: [String: Item] {
+        var dict: [String: Item] = [:]
+        for item in itemsB {
+            let key = binding.extractX(from: item).description
+            dict[key] = item
+        }
+        return dict
+    }
 
     @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
     @State private var selectedIndex: Int?
@@ -51,26 +66,7 @@ public struct SolarComparisonChartView<
         self.initialSelectedIndex = initialSelectedIndex
         self.showIntersectionRegions = showIntersectionRegions
         self._selectedIndex = State(initialValue: initialSelectedIndex)
-
-        // Cache grouped items once during init to prevent 60Hz main-thread re-grouping on body re-evaluations
-        let groups = binding.sortedGroupedData()
-        let itemsA = groups.first(where: { $0.key == seriesA })?.items ?? groups.first?.items ?? []
-        let itemsB = groups.first(where: { $0.key == seriesB })?.items ?? groups.dropFirst().first?.items ?? []
-
-        self.cachedItemsA = itemsA
-        self.cachedItemsB = itemsB
-
-        var dict: [String: Item] = [:]
-        for item in itemsB {
-            let key = binding.extractX(from: item).description
-            dict[key] = item
-        }
-        self.cachedDictB = dict
     }
-
-    private var itemsA: [Item] { cachedItemsA }
-    private var itemsB: [Item] { cachedItemsB }
-
     public var body: some View {
         let theme = environmentTheme
 
