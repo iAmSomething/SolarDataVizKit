@@ -142,11 +142,16 @@ public struct VizDataBinding<
     ///
     /// - Returns: (min, max) 튜플
     public func yBounds() -> (min: YValue, max: YValue) {
-        guard !data.isEmpty else { return (0, 1) }
-        var minY = data[0][keyPath: yKeyPath]
+        let validItems = data.filter {
+            let doubleVal = Double($0[keyPath: yKeyPath])
+            return !doubleVal.isNaN && !doubleVal.isInfinite
+        }
+        guard let first = validItems.first else { return (0, 1) }
+
+        var minY = first[keyPath: yKeyPath]
         var maxY = minY
 
-        for item in data {
+        for item in validItems {
             let val = item[keyPath: yKeyPath]
             if val < minY { minY = val }
             if val > maxY { maxY = val }

@@ -396,4 +396,143 @@ final class EdgeCaseProductionTests: XCTestCase {
         )
         XCTAssertNotNil(dualChart)
     }
+
+    // MARK: - 23. Real-World Financial Time Series FX Rates Test
+
+    func testRealWorldFinancialTimeSeriesFXRates() {
+        struct ForexQuote: Identifiable, Sendable {
+            let id: String
+            let timestamp: String
+            let rate: Double
+        }
+
+        let fxQuotes = [
+            ForexQuote(id: "1", timestamp: "10:00:00.001", rate: 1.08451),
+            ForexQuote(id: "2", timestamp: "10:00:00.002", rate: 1.08452),
+            ForexQuote(id: "3", timestamp: "10:00:00.003", rate: 1.08450)
+        ]
+
+        let binding = VizDataBinding(data: fxQuotes, x: \.timestamp, y: \.rate)
+        let bounds = binding.yBounds()
+        XCTAssertGreaterThan(bounds.max, bounds.min, "Micro FX rate range must preserve 5 decimal place floating point precision")
+        XCTAssertEqual(bounds.min, 1.08450, accuracy: 0.00001)
+        XCTAssertEqual(bounds.max, 1.08452, accuracy: 0.00001)
+    }
+
+    // MARK: - 24. Real-World Enterprise Product Revenue Hierarchy Test
+
+    func testRealWorldEnterpriseProductRevenueHierarchy() {
+        struct ProductRevenue: Identifiable, Sendable {
+            let id: String
+            let division: String
+            let productName: String
+            let quarterlyRevenue: Double
+        }
+
+        let enterpriseData = [
+            ProductRevenue(id: "p1", division: "Hardware", productName: "iPhone 16 Pro", quarterlyRevenue: 45000000.0),
+            ProductRevenue(id: "p2", division: "Hardware", productName: "MacBook Pro M4", quarterlyRevenue: 25000000.0),
+            ProductRevenue(id: "p3", division: "Services", productName: "iCloud Storage", quarterlyRevenue: 15000000.0),
+            ProductRevenue(id: "p4", division: "Services", productName: "Apple Music", quarterlyRevenue: 12000000.0)
+        ]
+
+        let binding = VizDataBinding(
+            data: enterpriseData,
+            x: \.productName,
+            y: \.quarterlyRevenue,
+            group: \.division
+        )
+
+        let rootTree = binding.buildHierarchyTree()
+        XCTAssertEqual(rootTree.children.count, 2, "Enterprise hierarchy must split into 2 primary divisions (Hardware, Services)")
+        
+        let hardwareNode = rootTree.children.first(where: { $0.name == "Hardware" })
+        XCTAssertEqual(hardwareNode?.value, 70000000.0, "Hardware division total revenue must equal 45M + 25M = 70M")
+    }
+
+    // MARK: - 25. Extreme Dynamic Scale Ratio (1 : 10^8) Test
+
+    func testExtremeDynamicScaleRatioDifference() {
+        struct PennyVsCap: Identifiable, Sendable {
+            let id: String
+            let asset: String
+            let marketCap: Double
+        }
+
+        let items = [
+            PennyVsCap(id: "1", asset: "Micro Penny Stock", marketCap: 0.000001),
+            PennyVsCap(id: "2", asset: "Mega Tech Cap", marketCap: 3_500_000_000_000.0)
+        ]
+
+        let binding = VizDataBinding(data: items, x: \.asset, y: \.marketCap)
+        let bounds = binding.yBounds()
+        XCTAssertEqual(bounds.min, 0.000001)
+        XCTAssertEqual(bounds.max, 3_500_000_000_000.0)
+
+        let normMin = binding.normalizeY(value: 0.000001, in: bounds)
+        let normMax = binding.normalizeY(value: 3_500_000_000_000.0, in: bounds)
+        XCTAssertEqual(normMin, 0.0, accuracy: 0.0001)
+        XCTAssertEqual(normMax, 1.0, accuracy: 0.0001)
+    }
+
+    // MARK: - 26. Unicode & Special Character X-Labels Defense Test
+
+    func testUnicodeAndSpecialCharacterXLabels() {
+        struct SpecialItem: Identifiable, Sendable {
+            let id: String
+            let rawLabel: String
+            let val: Double
+        }
+
+        let specialItems = [
+            SpecialItem(id: "1", rawLabel: "2026年 1월 🚀", val: 100.0),
+            SpecialItem(id: "2", rawLabel: "<script>alert('xss')</script>", val: 200.0),
+            SpecialItem(id: "3", rawLabel: "SELECT * FROM users;", val: 300.0)
+        ]
+
+        let binding = VizDataBinding(data: specialItems, x: \.rawLabel, y: \.val)
+        let keys = binding.sortedGroupKeys
+        XCTAssertFalse(keys.isEmpty)
+        XCTAssertEqual(binding.extractX(from: specialItems[0]), "2026年 1월 🚀")
+    }
+
+    // MARK: - 27. Duplicate Coordinates Cluster Density Defense Test
+
+    func testDuplicateCoordinatesClusterDensityDefense() async {
+        let duplicateGPSPoints = (0..<100).map { i in
+            (id: "gps_\(i)", point: CGPoint(x: 37.5665, y: 126.9780), weight: 1.0)
+        }
+
+        let nodes = await ClusterNodeCalculator.cluster(
+            points: duplicateGPSPoints,
+            thresholdRadius: 10.0
+        )
+
+        XCTAssertEqual(nodes.count, 1, "100 duplicate coordinate points must merge into exactly 1 cluster node without infinite loops")
+        XCTAssertEqual(nodes[0].count, 100)
+    }
+
+    // MARK: - 28. NaN and Infinity Input Sanitization Test
+
+    func testNaNAndInfinityInputSanitization() {
+        struct CorruptedItem: Identifiable, Sendable {
+            let id: String
+            let key: String
+            let val: Double
+        }
+
+        let corruptedData = [
+            CorruptedItem(id: "1", key: "Valid 1", val: 50.0),
+            CorruptedItem(id: "2", key: "Corrupted NaN", val: Double.nan),
+            CorruptedItem(id: "3", key: "Corrupted Inf", val: Double.infinity),
+            CorruptedItem(id: "4", key: "Valid 2", val: 150.0)
+        ]
+
+        let binding = VizDataBinding(data: corruptedData, x: \.key, y: \.val)
+        let bounds = binding.yBounds()
+        XCTAssertFalse(Double(bounds.min).isNaN, "Sanitized min bound must not be NaN")
+        XCTAssertFalse(Double(bounds.max).isInfinite, "Sanitized max bound must not be Infinity")
+        XCTAssertEqual(bounds.min, 50.0)
+        XCTAssertEqual(bounds.max, 150.0)
+    }
 }
