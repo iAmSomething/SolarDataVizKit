@@ -33,6 +33,8 @@ public struct VizDataBinding<
     public let yKeyPath: KeyPath<Item, YValue>
     /// 시리즈/그룹 식별용 KeyPath (선택사항)입니다.
     public let groupKeyPath: KeyPath<Item, String>?
+    /// 다단계 계층구조 식별용 KeyPath 배열입니다 (선택사항).
+    public let hierarchyKeyPaths: [KeyPath<Item, String>]
 
     /// KeyPath 바인딩 래퍼를 초기화합니다.
     ///
@@ -41,16 +43,19 @@ public struct VizDataBinding<
     ///   - x: X축 바인딩 KeyPath
     ///   - y: Y축 바인딩 KeyPath
     ///   - group: 시리즈 그룹 바인딩 KeyPath (기본값: nil)
+    ///   - hierarchy: 다중 계층 바인딩 KeyPath 배열 (기본값: 빈 배열)
     public init(
         data: [Item],
         x: KeyPath<Item, XValue>,
         y: KeyPath<Item, YValue>,
-        group: KeyPath<Item, String>? = nil
+        group: KeyPath<Item, String>? = nil,
+        hierarchy: [KeyPath<Item, String>] = []
     ) {
         self.data = data
         self.xKeyPath = x
         self.yKeyPath = y
         self.groupKeyPath = group
+        self.hierarchyKeyPaths = hierarchy.isEmpty ? (group != nil ? [group!] : []) : hierarchy
     }
 
     /// 특정 데이터 항목에서 X축 값을 추출합니다.
@@ -150,6 +155,6 @@ public struct VizDataBinding<
         let span = range.max - range.min
         guard span > 0 else { return 0.5 }
         let normalized = (value - range.min) / span
-        return Double(normalized)
+        return min(max(Double(normalized), 0.0), 1.0)
     }
 }
