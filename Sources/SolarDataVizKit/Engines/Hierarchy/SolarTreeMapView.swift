@@ -60,7 +60,7 @@ public struct SolarTreeMapView<
     private func tileView(tile: TreeTile<Item>, index: Int, theme: SolarVizTheme) -> some View {
         let isSelected = selectedTileID == tile.id
         let colors = theme.seriesColors
-        let color = colors[index % max(colors.count, 1)]
+        let color = !colors.isEmpty ? colors[index % colors.count] : theme.accentColor
 
         let titleText = String(describing: binding.extractX(from: tile.item))
         let pctText = String(format: "%.1f%%", tile.percentage)
@@ -101,6 +101,7 @@ public struct SolarTreeMapView<
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(titleText)
         .accessibilityValue("\(String(format: "%.1f", tile.percentage)) percent")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])
         .accessibilityHint("Double tap to toggle selection highlight")
         .onTapGesture {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {

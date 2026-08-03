@@ -117,7 +117,7 @@ public struct SolarSunburstView<
     @ViewBuilder
     private func arcView(arc: SunburstArc<Item>, center: CGPoint, theme: SolarVizTheme) -> some View {
         let isSelected = selectedArcID == arc.id
-        let baseColor = theme.seriesColors[arc.groupIndex % max(theme.seriesColors.count, 1)]
+        let baseColor = !theme.seriesColors.isEmpty ? theme.seriesColors[arc.groupIndex % theme.seriesColors.count] : theme.accentColor
         let color = arc.isChild ? baseColor.opacity(0.60 + 0.12 * Double(arc.childIndex % 3)) : baseColor
 
         ZStack {
@@ -157,6 +157,7 @@ public struct SolarSunburstView<
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(arc.label)")
         .accessibilityValue("\(String(format: "%.1f", arc.percentage)) percent")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])
         .accessibilityHint("Double tap to highlight segment")
         .onTapGesture {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {

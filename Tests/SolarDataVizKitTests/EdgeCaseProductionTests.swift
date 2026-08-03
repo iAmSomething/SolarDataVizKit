@@ -538,6 +538,7 @@ final class EdgeCaseProductionTests: XCTestCase {
 
     // MARK: - 29. Phase 5: O(1) Dictionary Lookup Scrubbing Performance Test
 
+    @MainActor
     func testPhase5DualComparisonO1DictionaryLookupPerformance() {
         struct FastItem: Identifiable, Sendable {
             let id: String
@@ -592,7 +593,6 @@ final class EdgeCaseProductionTests: XCTestCase {
     func testPhase5DynamicTooltipOffsetBoundsCalculation() {
         let containerWidth: CGFloat = 400.0
         let tooltipWidth: CGFloat = 160.0
-        let totalCount = 12
 
         // Test Far Left (Index 0 - Jan)
         let progress0: CGFloat = 0.0
@@ -605,5 +605,55 @@ final class EdgeCaseProductionTests: XCTestCase {
         let targetX11 = containerWidth * progress11
         let clampedX11 = min(max(targetX11 - tooltipWidth / 2, 0), containerWidth - tooltipWidth)
         XCTAssertEqual(clampedX11, 240.0, "Far right index must clamp offset to containerWidth - tooltipWidth (240.0)")
+    }
+
+    // MARK: - 32. Phase 4: Empty Array Theme Colors Crash Defense Test
+
+    @MainActor
+    func testPhase4EmptyArrayThemeColorsCrashDefense() {
+        let emptyTheme = SolarVizTheme(
+            name: "EmptyTheme",
+            backgroundColor: .black,
+            primaryTextColor: .white,
+            secondaryTextColor: .gray,
+            borderColor: .gray,
+            accentColor: .orange,
+            seriesColors: [], // Empty Array Theme!
+            cornerRadius: 12.0,
+            glassmorphismOpacity: 0.85,
+            gridLineWidth: 1.0
+        )
+
+        let items = [
+            SolarDefaultDataPoint(xLabel: "Tile 1", value: 100.0),
+            SolarDefaultDataPoint(xLabel: "Tile 2", value: 200.0)
+        ]
+        let binding = VizDataBinding(data: items, x: \.xLabel, y: \.value)
+
+        // Must not crash when rendering with empty seriesColors
+        let treemap = SolarTreeMapView(binding: binding).environment(\.solarVizTheme, emptyTheme)
+        let sunburst = SolarSunburstView(binding: binding).environment(\.solarVizTheme, emptyTheme)
+
+        XCTAssertNotNil(treemap)
+        XCTAssertNotNil(sunburst)
+    }
+
+    // MARK: - 33. Phase 4: UIKit Hosting Controller Parent Lifecycle Test
+
+    @MainActor
+    func testPhase4UIKitHostingControllerParentLifecycle() {
+        #if canImport(UIKit)
+        let items = [SolarDefaultDataPoint(xLabel: "A", value: 10.0)]
+        let binding = VizDataBinding(data: items, x: \.xLabel, y: \.value)
+        let chart = SolarTreeMapView(binding: binding)
+
+        let hostingView = SolarVizHostingView(rootView: chart)
+        let parentVC = UIViewController()
+        parentVC.view.addSubview(hostingView)
+
+        XCTAssertEqual(parentVC.view.subviews.count, 1)
+        hostingView.removeFromSuperview()
+        XCTAssertEqual(parentVC.view.subviews.count, 0)
+        #endif
     }
 }
