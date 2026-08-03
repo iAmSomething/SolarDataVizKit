@@ -10,17 +10,34 @@ struct DemoDataPoint: SolarVizDataPoint {
 
 @main
 struct SolarDataVizDemoApp: App {
+    var initialTab: Int {
+        let args = ProcessInfo.processInfo.arguments
+        if let idx = args.firstIndex(of: "--tab"), idx + 1 < args.count {
+            let name = args[idx + 1].lowercased()
+            switch name {
+            case "clustering": return 1
+            case "treemap": return 2
+            case "sunburst": return 3
+            default: return 0
+            }
+        }
+        return 0
+    }
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(selectedTab: initialTab)
                 .preferredColorScheme(.dark)
         }
     }
 }
 
 struct ContentView: View {
-    @State private var selectedTab = 0
-    let timer = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
+    @State var selectedTab: Int
+
+    init(selectedTab: Int = 0) {
+        _selectedTab = State(initialValue: selectedTab)
+    }
 
     var comparisonData: [SolarDefaultDataPoint] {
         let seriesA = (0..<10).map { i in
@@ -158,11 +175,6 @@ struct ContentView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 20)
-            }
-        }
-        .onReceive(timer) { _ in
-            withAnimation(.easeInOut(duration: 0.3)) {
-                selectedTab = (selectedTab + 1) % 4
             }
         }
     }

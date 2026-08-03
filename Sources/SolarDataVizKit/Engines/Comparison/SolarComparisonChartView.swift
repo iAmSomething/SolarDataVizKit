@@ -79,37 +79,36 @@ public struct SolarComparisonChartView<
                             .foregroundColor(theme.primaryTextColor)
                     }
                 }
-                .padding(.horizontal, 4)
-
                 // Main Chart Canvas
                 ZStack(alignment: .topLeading) {
+                    let colorA = theme.seriesColors.first ?? theme.accentColor
+                    let colorB = theme.seriesColors.dropFirst().first ?? Color(red: 56/255, green: 189/255, blue: 248/255)
+
                     Chart {
-                        // Draw Series A (Solid Line)
+                        // Draw Series A (Solid Line - Orange)
                         ForEach(itemsA) { item in
                             let xVal = binding.extractX(from: item)
                             let yVal = binding.extractY(from: item)
 
                             LineMark(
                                 x: .value("X", xVal.description),
-                                y: .value("Y", Double(yVal)),
-                                series: .value("Series", seriesA)
+                                y: .value("Y", Double(yVal))
                             )
-                            .foregroundStyle(theme.seriesColors.first ?? theme.accentColor)
+                            .foregroundStyle(by: .value("Series", seriesA))
                             .lineStyle(StrokeStyle(lineWidth: 3))
                         }
 
-                        // Draw Series B (Dashed Line with distinct Cyan/Blue Color)
+                        // Draw Series B (Dashed Line - Cyan Blue)
                         ForEach(itemsB) { item in
                             let xVal = binding.extractX(from: item)
                             let yVal = binding.extractY(from: item)
 
                             LineMark(
                                 x: .value("X", xVal.description),
-                                y: .value("Y", Double(yVal)),
-                                series: .value("Series", seriesB)
+                                y: .value("Y", Double(yVal))
                             )
-                            .foregroundStyle(theme.seriesColors.dropFirst().first ?? Color.blue)
-                            .lineStyle(StrokeStyle(lineWidth: 2.5, dash: [4, 4]))
+                            .foregroundStyle(by: .value("Series", seriesB))
+                            .lineStyle(StrokeStyle(lineWidth: 2.5, dash: [5, 4]))
                         }
 
                         if let selectedIndex, selectedIndex < itemsA.count {
@@ -121,6 +120,11 @@ public struct SolarComparisonChartView<
                                 .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
                         }
                     }
+                    .chartForegroundStyleScale([
+                        seriesA: colorA,
+                        seriesB: colorB
+                    ])
+                    .chartLegend(.hidden)
                     .chartYAxis {
                         AxisMarks(position: .leading) {
                             AxisGridLine(stroke: StrokeStyle(lineWidth: theme.gridLineWidth, dash: [2, 2]))
