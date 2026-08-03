@@ -17,6 +17,9 @@ import Foundation
 ///     group: \.category
 /// )
 /// ```
+/// - Note: Swift 표준 라이브러리의 `KeyPath` 클래스는 타입 정의상 `Sendable` 프로토콜을 명시적으로 채택하지 않으나,
+/// `VizDataBinding` 내부의 모든 프로퍼티는 불변(`let`)이며 타입 파라미터 `Item`, `XValue`, `YValue`가 모두 `Sendable`을 준수하므로
+/// `@unchecked Sendable`을 통해 스레드 세이프티를 완벽히 보장합니다.
 public struct VizDataBinding<
     Item: Identifiable & Sendable,
     XValue: Hashable & Sendable,
@@ -78,6 +81,20 @@ public struct VizDataBinding<
         return item[keyPath: groupKeyPath]
     }
 
+    /// 전체 그룹 키를 최초 삽입 순서대로 보장하여 반환합니다 (Flickering 방지).
+    public var sortedGroupKeys: [String] {
+        guard groupKeyPath != nil else { return ["Default"] }
+        var seen = Set<String>()
+        var keys: [String] = []
+        for item in data {
+            let key = extractGroup(from: item)
+            if seen.insert(key).inserted {
+                keys.append(key)
+            }
+        }
+        return keys
+    }
+
     /// 전체 데이터를 속한 그룹/시리즈별로 분류하여 반환합니다.
     ///
     /// - Returns: 그룹 이름을 키로 하는 딕셔너리
@@ -91,6 +108,15 @@ public struct VizDataBinding<
             dict[key, default: []].append(item)
         }
         return dict
+    }
+
+    /// 결정론적(Deterministic) 순서가 보장된 그룹별 데이터 배열을 반환합니다.
+    public func sortedGroupedData() -> [(key: String, items: [Item])] {
+        let dict = groupedData()
+        return sortedGroupKeys.compactMap { key in
+            guard let items = dict[key] else { return nil }
+            return (key: key, items: items)
+        }
     }
 
     /// 전체 데이터에서 Y축 수치의 최솟값과 최댓값을 구합니다.

@@ -76,7 +76,7 @@ final class ComparisonChartUITests: XCTestCase {
             seriesB: "Series B"
         )
 
-        let outerVStack = try chartView.inspect().vStack()
+        let outerVStack = try chartView.inspect().find(ViewType.VStack.self)
         // Check Legend Header
         let legendHStack = try outerVStack.hStack(0)
         let itemA = try legendHStack.hStack(0)

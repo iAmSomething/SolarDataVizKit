@@ -26,6 +26,7 @@ public struct SolarClusterScatterView<
 
     @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
     @State private var previousClusterCount: Int = 0
+    @State private var nodes: [ClusterNode] = []
 
     public init(
         binding: VizDataBinding<Item, XValue, YValue>,
@@ -40,19 +41,6 @@ public struct SolarClusterScatterView<
 
         GeometryReader { geometry in
             let size = geometry.size
-            let boundsX = xBounds()
-            let boundsY = binding.yBounds()
-
-            let points = binding.data.map { item -> (id: String, point: CGPoint, weight: Double) in
-                let normX = normalize(val: binding.extractX(from: item), min: boundsX.min, max: boundsX.max)
-                let normY = binding.normalizeY(value: binding.extractY(from: item), in: boundsY)
-
-                let posX = 30 + CGFloat(normX) * (size.width - 60)
-                let posY = size.height - 30 - CGFloat(normY) * (size.height - 60)
-                return (id: String(describing: item.id), point: CGPoint(x: posX, y: posY), weight: 1.0)
-            }
-
-            let nodes = ClusterNodeCalculator.cluster(points: points, thresholdRadius: clusterRadiusThreshold)
 
             ZStack {
                 // Density Heatmap Layer
@@ -94,6 +82,9 @@ public struct SolarClusterScatterView<
                 }
                 previousClusterCount = newCount
             }
+            .task(id: "\(binding.data.count)_\(clusterRadiusThreshold)_\(size.width)x\(size.height)") {
+                await updateClustersOffMainThread(size: size)
+            }
         }
         .background(
             RoundedRectangle(cornerRadius: environmentTheme.cornerRadius)
@@ -103,6 +94,39 @@ public struct SolarClusterScatterView<
             RoundedRectangle(cornerRadius: environmentTheme.cornerRadius)
                 .stroke(environmentTheme.borderColor, lineWidth: 1)
         )
+    }
+
+    private func updateClustersOffMainThread(size: CGSize) async {
+        guard size.width > 0, size.height > 0 else { return }
+
+        let cacheKey = "cluster_\(binding.data.count)_\(clusterRadiusThreshold)_\(Int(size.width))x\(Int(size.height))"
+        if let cached = SolarVizLayoutCache.shared.getClusterNodes(forKey: cacheKey) {
+            self.nodes = cached
+            return
+        }
+
+        let localBinding = self.binding
+        let radius = clusterRadiusThreshold
+        let boundsX = xBounds()
+        let boundsY = binding.yBounds()
+
+        // Offload O(N^2) clustering to detached background thread
+        let calculated = await Task.detached(priority: .userInitiated) { () -> [ClusterNode] in
+            let points = localBinding.data.map { item -> (id: String, point: CGPoint, weight: Double) in
+                let rawX = localBinding.extractX(from: item)
+                let spanX = boundsX.max - boundsX.min
+                let normX = spanX > 0 ? Double((rawX - boundsX.min) / spanX) : 0.5
+                let normY = localBinding.normalizeY(value: localBinding.extractY(from: item), in: boundsY)
+
+                let posX = 30 + CGFloat(normX) * (size.width - 60)
+                let posY = size.height - 30 - CGFloat(normY) * (size.height - 60)
+                return (id: String(describing: item.id), point: CGPoint(x: posX, y: posY), weight: 1.0)
+            }
+            return ClusterNodeCalculator.cluster(points: points, thresholdRadius: radius)
+        }.value
+
+        SolarVizLayoutCache.shared.setClusterNodes(calculated, forKey: cacheKey)
+        self.nodes = calculated
     }
 
     private func xBounds() -> (min: XValue, max: XValue) {

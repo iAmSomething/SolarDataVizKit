@@ -42,147 +42,158 @@ public struct SolarComparisonChartView<
         self.seriesB = seriesB
     }
 
-    private var grouped: [String: [Item]] {
-        binding.groupedData()
+    private var sortedGroups: [(key: String, items: [Item])] {
+        binding.sortedGroupedData()
     }
 
     private var itemsA: [Item] {
-        grouped[seriesA] ?? (grouped.values.first ?? [])
+        if let match = sortedGroups.first(where: { $0.key == seriesA }) {
+            return match.items
+        }
+        return sortedGroups.first?.items ?? []
     }
 
     private var itemsB: [Item] {
-        grouped[seriesB] ?? (grouped.values.dropFirst().first ?? [])
+        if let match = sortedGroups.first(where: { $0.key == seriesB }) {
+            return match.items
+        }
+        return sortedGroups.dropFirst().first?.items ?? []
     }
 
     public var body: some View {
         let theme = environmentTheme
 
-        VStack(alignment: .leading, spacing: 12) {
-            // Header Legend
-            HStack(spacing: 16) {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(theme.seriesColors.first ?? theme.accentColor)
-                        .frame(width: 8, height: 8)
-                    Text(seriesA)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(theme.primaryTextColor)
+        GeometryReader { geometry in
+            let containerWidth = max(geometry.size.width, 1.0)
+
+            VStack(alignment: .leading, spacing: 12) {
+                // Header Legend
+                HStack(spacing: 16) {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(theme.seriesColors.first ?? theme.accentColor)
+                            .frame(width: 8, height: 8)
+                        Text(seriesA)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(theme.primaryTextColor)
+                    }
+
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(theme.seriesColors.dropFirst().first ?? Color.blue)
+                            .frame(width: 8, height: 8)
+                        Text(seriesB)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(theme.primaryTextColor)
+                    }
                 }
+                .padding(.horizontal, 4)
 
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(theme.seriesColors.dropFirst().first ?? Color.blue)
-                        .frame(width: 8, height: 8)
-                    Text(seriesB)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(theme.primaryTextColor)
-                }
-            }
-            .padding(.horizontal, 4)
+                // Main Chart Canvas
+                ZStack(alignment: .topLeading) {
+                    Chart {
+                        // Draw Area Shading Path
+                        ForEach(itemsA) { item in
+                            let xVal = binding.extractX(from: item)
+                            let yVal = binding.extractY(from: item)
 
-            // Main Chart Canvas
-            ZStack(alignment: .topLeading) {
-                Chart {
-                    ForEach(Array(itemsA.enumerated()), id: \.offset) { index, item in
-                        let xVal = binding.extractX(from: item)
-                        let yVal = binding.extractY(from: item)
-
-                        LineMark(
-                            x: .value("X", xVal.description),
-                            y: .value("Y", Double(yVal))
-                        )
+                            LineMark(
+                                x: .value("X", xVal.description),
+                                y: .value("Y", Double(yVal))
+                            )
+                        }
                         .foregroundStyle(theme.seriesColors.first ?? theme.accentColor)
-                        .lineStyle(StrokeStyle(lineWidth: 2.5))
+                        .lineStyle(StrokeStyle(lineWidth: 3))
+
+                        ForEach(itemsB) { item in
+                            let xVal = binding.extractX(from: item)
+                            let yVal = binding.extractY(from: item)
+
+                            LineMark(
+                                x: .value("X", xVal.description),
+                                y: .value("Y", Double(yVal))
+                            )
+                            .foregroundStyle(theme.seriesColors.dropFirst().first ?? Color.blue)
+                            .lineStyle(StrokeStyle(lineWidth: 2.5, dash: [4, 4]))
+                        }
+
+                        if let selectedIndex, selectedIndex < itemsA.count {
+                            let itemA = itemsA[selectedIndex]
+                            let xVal = binding.extractX(from: itemA)
+
+                            RuleMark(x: .value("Selected", xVal.description))
+                                .foregroundStyle(theme.secondaryTextColor.opacity(0.5))
+                                .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                        }
                     }
-
-                    ForEach(Array(itemsB.enumerated()), id: \.offset) { index, item in
-                        let xVal = binding.extractX(from: item)
-                        let yVal = binding.extractY(from: item)
-
-                        LineMark(
-                            x: .value("X", xVal.description),
-                            y: .value("Y", Double(yVal))
-                        )
-                        .foregroundStyle(theme.seriesColors.dropFirst().first ?? Color.blue)
-                        .lineStyle(StrokeStyle(lineWidth: 2.5, dash: [4, 4]))
+                    .chartYAxis {
+                        AxisMarks(position: .leading) {
+                            AxisGridLine(stroke: StrokeStyle(lineWidth: theme.gridLineWidth, dash: [2, 2]))
+                                .foregroundStyle(theme.borderColor)
+                            AxisValueLabel()
+                                .foregroundStyle(theme.secondaryTextColor)
+                        }
                     }
+                    .chartXAxis {
+                        AxisMarks {
+                            AxisGridLine(stroke: StrokeStyle(lineWidth: theme.gridLineWidth))
+                                .foregroundStyle(theme.borderColor)
+                            AxisValueLabel()
+                                .foregroundStyle(theme.secondaryTextColor)
+                        }
+                    }
+                    .padding(8)
 
-                    if let selectedIndex, selectedIndex < itemsA.count {
+                    // Tooltip Overlay on Touch Selection
+                    if let selectedIndex, selectedIndex < itemsA.count, selectedIndex < itemsB.count {
                         let itemA = itemsA[selectedIndex]
-                        let xVal = binding.extractX(from: itemA)
+                        let itemB = itemsB[selectedIndex]
+                        let xVal = binding.extractX(from: itemA).description
+                        let valA = Double(binding.extractY(from: itemA))
+                        let valB = Double(binding.extractY(from: itemB))
 
-                        RuleMark(x: .value("Selected", xVal.description))
-                            .foregroundStyle(theme.secondaryTextColor.opacity(0.5))
-                            .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                        DeltaTooltipOverlay(
+                            xLabel: xVal,
+                            valueA: valA,
+                            valueB: valB,
+                            labelA: seriesA,
+                            labelB: seriesB,
+                            theme: theme
+                        )
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                        .padding(12)
                     }
                 }
-                .chartYAxis {
-                    AxisMarks(position: .leading) {
-                        AxisGridLine(stroke: StrokeStyle(lineWidth: theme.gridLineWidth, dash: [2, 2]))
-                            .foregroundStyle(theme.borderColor)
-                        AxisValueLabel()
-                            .foregroundStyle(theme.secondaryTextColor)
-                    }
-                }
-                .chartXAxis {
-                    AxisMarks {
-                        AxisGridLine(stroke: StrokeStyle(lineWidth: theme.gridLineWidth))
-                            .foregroundStyle(theme.borderColor)
-                        AxisValueLabel()
-                            .foregroundStyle(theme.secondaryTextColor)
-                    }
-                }
-                .padding(8)
+                .background(
+                    RoundedRectangle(cornerRadius: theme.cornerRadius)
+                        .fill(theme.backgroundColor)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: theme.cornerRadius)
+                        .stroke(theme.borderColor, lineWidth: 1)
+                )
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            let totalCount = max(itemsA.count, 1)
+                            let step = max(value.location.x / containerWidth, 0.0) // Dynamically normalized by containerWidth
+                            let index = min(max(Int(step * CGFloat(totalCount)), 0), totalCount - 1)
 
-                // Tooltip Overlay on Touch Selection
-                if let selectedIndex, selectedIndex < itemsA.count, selectedIndex < itemsB.count {
-                    let itemA = itemsA[selectedIndex]
-                    let itemB = itemsB[selectedIndex]
-                    let xVal = binding.extractX(from: itemA).description
-                    let valA = Double(binding.extractY(from: itemA))
-                    let valB = Double(binding.extractY(from: itemB))
-
-                    DeltaTooltipOverlay(
-                        xLabel: xVal,
-                        valueA: valA,
-                        valueB: valB,
-                        labelA: seriesA,
-                        labelB: seriesB,
-                        theme: theme
-                    )
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                    .padding(12)
-                }
-            }
-            .background(
-                RoundedRectangle(cornerRadius: theme.cornerRadius)
-                    .fill(theme.backgroundColor)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: theme.cornerRadius)
-                    .stroke(theme.borderColor, lineWidth: 1)
-            )
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        let totalCount = max(itemsA.count, 1)
-                        let step = max(value.location.x / 300.0, 0.0) // Normalize approx
-                        let index = min(max(Int(step * CGFloat(totalCount)), 0), totalCount - 1)
-
-                        if selectedIndex != index {
-                            selectedIndex = index
-                            Task { @MainActor in
-                                SolarVizHaptics.shared.playSelection()
+                            if selectedIndex != index {
+                                selectedIndex = index
+                                Task { @MainActor in
+                                    SolarVizHaptics.shared.playSelection()
+                                }
+                                checkIntersectionHaptic(at: index)
                             }
-                            checkIntersectionHaptic(at: index)
                         }
-                    }
-                    .onEnded { _ in
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            selectedIndex = nil
+                        .onEnded { _ in
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                selectedIndex = nil
+                            }
                         }
-                    }
-            )
+                )
+            }
         }
     }
 
