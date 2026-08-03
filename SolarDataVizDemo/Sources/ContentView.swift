@@ -77,6 +77,14 @@ struct ContentView: View {
         return nil
     }
 
+    var initialSelectID: String? {
+        let args = ProcessInfo.processInfo.arguments
+        if let idx = args.firstIndex(of: "--select-id"), idx + 1 < args.count {
+            return args[idx + 1]
+        }
+        return nil
+    }
+
     var body: some View {
         ZStack {
             Color(red: 11/255, green: 10/255, blue: 9/255).ignoresSafeArea()
@@ -161,7 +169,8 @@ struct ContentView: View {
                                     data: hierarchyItems,
                                     x: \.xLabel,
                                     y: \.value
-                                )
+                                ),
+                                initialSelectedTileID: initialSelectID
                             )
                         }
                         .padding(16)
@@ -176,7 +185,8 @@ struct ContentView: View {
                                     x: \.xLabel,
                                     y: \.value,
                                     group: \.category
-                                )
+                                ),
+                                initialSelectedArcID: initialSelectID
                             )
                         }
                         .padding(16)

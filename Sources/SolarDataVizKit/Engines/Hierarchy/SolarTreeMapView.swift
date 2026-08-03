@@ -24,10 +24,12 @@ public struct SolarTreeMapView<
 
     public init(
         binding: VizDataBinding<Item, XValue, YValue>,
-        strategy: any TreemapLayoutStrategy = SquarifiedTreemapStrategy()
+        strategy: any TreemapLayoutStrategy = SquarifiedTreemapStrategy(),
+        initialSelectedTileID: String? = nil
     ) {
         self.binding = binding
         self.strategy = strategy
+        self._selectedTileID = State(initialValue: initialSelectedTileID)
     }
 
     public var body: some View {

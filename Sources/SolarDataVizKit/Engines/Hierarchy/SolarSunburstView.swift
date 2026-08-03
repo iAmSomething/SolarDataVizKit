@@ -64,8 +64,12 @@ public struct SolarSunburstView<
     @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
     @State private var selectedArcID: String?
 
-    public init(binding: VizDataBinding<Item, XValue, YValue>) {
+    public init(
+        binding: VizDataBinding<Item, XValue, YValue>,
+        initialSelectedArcID: String? = nil
+    ) {
         self.binding = binding
+        self._selectedArcID = State(initialValue: initialSelectedArcID)
     }
 
     public var body: some View {
