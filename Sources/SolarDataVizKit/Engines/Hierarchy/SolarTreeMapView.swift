@@ -166,7 +166,7 @@ public struct SolarTreeMapView<
                     tileRect = CGRect(x: rect.origin.x + offset, y: rect.origin.y, width: elemLength, height: rowThickness)
                 }
                 offset += elemLength
-                tiles.append(TreeTile(id: "tile_\(tiles.count)", item: elem.item, rect: tileRect, percentage: pct))
+                tiles.append(TreeTile(id: "tile_\(String(describing: elem.item.id))", item: elem.item, rect: tileRect, percentage: pct))
             }
 
             if isHorizontal {

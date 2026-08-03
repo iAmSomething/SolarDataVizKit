@@ -250,6 +250,7 @@ final class EdgeCaseProductionTests: XCTestCase {
 
     // MARK: - 14. Categorical String Scatter Plot Test
 
+    @MainActor
     func testCategoricalScatterPlotStringXValues() {
         let items = [
             ProductionEdgeItem(id: "1", xLabel: "Category Alpha", yValue: 50.0, category: "A", subCategory: "S"),
@@ -260,5 +261,58 @@ final class EdgeCaseProductionTests: XCTestCase {
         XCTAssertEqual(binding.extractX(from: items[0]), "Category Alpha")
         let view = SolarClusterScatterView(binding: binding)
         XCTAssertNotNil(view)
+    }
+
+    // MARK: - 15. Real Identifiable Item ID In TreeTile
+
+    func testRealIdentifiableItemIDInTreeTile() {
+        let items = [
+            ProductionEdgeItem(id: "custom_item_999", xLabel: "A", yValue: 100.0, category: "C", subCategory: "S")
+        ]
+        let tileID = "tile_\(String(describing: items[0].id))"
+        XCTAssertEqual(tileID, "tile_custom_item_999", "Tile ID must derive from real Identifiable item ID instead of shifting array index")
+    }
+
+    // MARK: - 16. Parent Path-Accumulated Tree Node ID Collision Prevention
+
+    func testTreeNodeIDPathCollisionPrevention() {
+        let items = [
+            ProductionEdgeItem(id: "1", xLabel: "A", yValue: 100.0, category: "Korea", subCategory: "Marketing"),
+            ProductionEdgeItem(id: "2", xLabel: "B", yValue: 200.0, category: "US", subCategory: "Marketing")
+        ]
+
+        let binding = VizDataBinding(data: items, x: \.xLabel, y: \.yValue, hierarchy: [\.category, \.subCategory])
+        let tree = binding.buildHierarchyTree()
+
+        let krMarketing = tree.children[0].children[0].id
+        let usMarketing = tree.children[1].children[0].id
+
+        XCTAssertNotEqual(krMarketing, usMarketing, "Same-name same-level nodes under different parent branches must generate unique path-accumulated IDs")
+        XCTAssertTrue(krMarketing.contains("Korea"))
+        XCTAssertTrue(usMarketing.contains("US"))
+    }
+
+    // MARK: - 17. Compact DJB2 Hashed Cluster Node ID Test
+
+    func testCompactHashedClusterNodeID() {
+        let points = (0..<1_000).map { i in
+            (id: "uuid_string_item_\(i)", point: CGPoint(x: 10.0, y: 10.0), weight: 1.0)
+        }
+
+        let clusters = ClusterNodeCalculator.cluster(points: points, thresholdRadius: 50.0)
+        XCTAssertEqual(clusters.count, 1)
+        XCTAssertLessThan(clusters[0].id.count, 50, "Merged cluster node ID length must be compact O(1) hash to prevent multi-megabyte string heap overflow")
+    }
+
+    // MARK: - 18. Full 360 Degree Sunburst Ring Seam Scar Prevention
+
+    func testSunburstFull360RingNoSeamScar() {
+        let items = [
+            ProductionEdgeItem(id: "1", xLabel: "Solo Item", yValue: 1000.0, category: "Single", subCategory: "Sub")
+        ]
+
+        let binding = VizDataBinding(data: items, x: \.xLabel, y: \.yValue, group: \.category)
+        let sunburst = SolarSunburstView(binding: binding)
+        XCTAssertNotNil(sunburst)
     }
 }

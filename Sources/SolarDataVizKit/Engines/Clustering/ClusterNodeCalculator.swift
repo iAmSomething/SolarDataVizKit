@@ -134,8 +134,9 @@ public struct ClusterNodeCalculator: Sendable {
             let baseRadius: CGFloat = 16.0
             let calculatedRadius = baseRadius + CGFloat(log2(Double(count)) * 6.0) + CGFloat(totalWeight * 2.0)
 
+            let hashVal = abs(childIDs.reduce(5381) { ($0 << 5) &+ $0 &+ $1.hashValue })
             resultNodes.append(ClusterNode(
-                id: "cluster_\(current.id)_\(count)",
+                id: "cluster_\(count)_\(hashVal)",
                 center: center,
                 radius: min(calculatedRadius, 60.0),
                 childIDs: childIDs,

@@ -165,20 +165,23 @@ public struct VizDataBinding<
             let total = data.reduce(0.0) { $0 + max(0.0, Double(extractY(from: $1))) }
             let leaves = data.map { item in
                 HierarchyNode(
+                    id: "leaf_\(String(describing: item.id))",
                     name: String(describing: extractX(from: item)),
                     value: max(0.0, Double(extractY(from: item))),
                     level: 1,
                     item: item
                 )
             }
-            return HierarchyNode(name: "Root", value: total, level: 0, children: leaves)
+            return HierarchyNode(id: "root", name: "Root", value: total, level: 0, children: leaves)
         }
 
-        func buildSubtree(items: [Item], depth: Int) -> [HierarchyNode<Item>] {
+        func buildSubtree(items: [Item], depth: Int, parentPath: String) -> [HierarchyNode<Item>] {
             guard depth < paths.count else {
                 return items.map { item in
-                    HierarchyNode(
-                        name: String(describing: extractX(from: item)),
+                    let name = String(describing: extractX(from: item))
+                    return HierarchyNode(
+                        id: "\(parentPath)_leaf_\(String(describing: item.id))",
+                        name: name,
                         value: max(0.0, Double(extractY(from: item))),
                         level: depth + 1,
                         item: item
@@ -198,15 +201,22 @@ public struct VizDataBinding<
 
             return groupKeys.compactMap { key in
                 guard let groupItems = groups[key] else { return nil }
-                let children = buildSubtree(items: groupItems, depth: depth + 1)
+                let currentPath = "\(parentPath)_\(key)"
+                let children = buildSubtree(items: groupItems, depth: depth + 1, parentPath: currentPath)
                 let groupTotal = children.reduce(0.0) { $0 + $1.value }
-                return HierarchyNode(name: key, value: groupTotal, level: depth + 1, children: children)
+                return HierarchyNode(
+                    id: "node_l\(depth + 1)_\(currentPath)",
+                    name: key,
+                    value: groupTotal,
+                    level: depth + 1,
+                    children: children
+                )
             }
         }
 
-        let rootChildren = buildSubtree(items: data, depth: 0)
+        let rootChildren = buildSubtree(items: data, depth: 0, parentPath: "root")
         let rootTotal = rootChildren.reduce(0.0) { $0 + $1.value }
-        return HierarchyNode(name: "Root", value: rootTotal, level: 0, children: rootChildren)
+        return HierarchyNode(id: "root", name: "Root", value: rootTotal, level: 0, children: rootChildren)
     }
 }
 

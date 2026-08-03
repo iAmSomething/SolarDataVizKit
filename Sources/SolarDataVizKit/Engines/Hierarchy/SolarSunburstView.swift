@@ -92,21 +92,15 @@ public struct SolarSunburstView<
                     .fill(color.opacity(isSelected ? 0.95 : 0.75))
                     .overlay(
                         Path { path in
-                            path.addArc(
-                                center: center,
-                                radius: arc.outerRadius,
-                                startAngle: arc.startAngle,
-                                endAngle: arc.endAngle,
-                                clockwise: false
-                            )
-                            path.addArc(
-                                center: center,
-                                radius: arc.innerRadius,
-                                startAngle: arc.endAngle,
-                                endAngle: arc.startAngle,
-                                clockwise: true
-                            )
-                            path.closeSubpath()
+                            let sweepDeg = abs(arc.endAngle.degrees - arc.startAngle.degrees)
+                            if sweepDeg >= 359.9 {
+                                path.addArc(center: center, radius: arc.outerRadius, startAngle: .degrees(0), endAngle: .degrees(360), clockwise: false)
+                                path.addArc(center: center, radius: arc.innerRadius, startAngle: .degrees(360), endAngle: .degrees(0), clockwise: true)
+                            } else {
+                                path.addArc(center: center, radius: arc.outerRadius, startAngle: arc.startAngle, endAngle: arc.endAngle, clockwise: false)
+                                path.addArc(center: center, radius: arc.innerRadius, startAngle: arc.endAngle, endAngle: arc.startAngle, clockwise: true)
+                                path.closeSubpath()
+                            }
                         }
                         .stroke(isSelected ? Color.white : theme.borderColor, lineWidth: isSelected ? 2 : 1)
                     )
@@ -201,7 +195,7 @@ public struct SolarSunburstView<
 
             // 2. Child Level Arcs (Outer Ring inside Parent angular span)
             var childAngle = groupStartAngle
-            for (itemIndex, item) in groupItems.enumerated() {
+            for (_, item) in groupItems.enumerated() {
                 let val = max(0.0, Double(binding.extractY(from: item)))
                 let itemSweep = (val / groupSum) * groupSweep
                 let itemStartA = Angle(degrees: childAngle)
@@ -212,7 +206,7 @@ public struct SolarSunburstView<
                 let itemLabel = binding.extractX(from: item).description
 
                 arcs.append(SunburstArc(
-                    id: "child_\(groupIndex)_\(itemIndex)",
+                    id: "child_\(groupName)_\(String(describing: item.id))",
                     item: item,
                     startAngle: itemStartA,
                     endAngle: itemEndA,
