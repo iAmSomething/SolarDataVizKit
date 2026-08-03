@@ -1,6 +1,6 @@
-import Testing
-@testable import SolarDataVizKit
+import XCTest
 import CoreGraphics
+@testable import SolarDataVizKit
 
 struct HierarchyTestModel: SolarVizDataPoint {
     let id: String
@@ -8,10 +8,8 @@ struct HierarchyTestModel: SolarVizDataPoint {
     let value: Double
 }
 
-@Suite("Hierarchy Engine Math Tests")
-struct HierarchyEngineTests {
+final class HierarchyEngineTests: XCTestCase {
 
-    @Test("TreeMap tile percentage calculation")
     func testTreeMapTilePercentages() {
         let items = [
             HierarchyTestModel(id: "1", name: "Stocks", value: 500.0),
@@ -26,18 +24,17 @@ struct HierarchyEngineTests {
         )
 
         let total = binding.data.reduce(0.0) { $0 + $1.value }
-        #expect(total == 1000.0)
+        XCTAssertEqual(total, 1000.0)
 
         let p1 = (items[0].value / total) * 100.0
         let p2 = (items[1].value / total) * 100.0
         let p3 = (items[2].value / total) * 100.0
 
-        #expect(p1 == 50.0)
-        #expect(p2 == 30.0)
-        #expect(p3 == 20.0)
+        XCTAssertEqual(p1, 50.0)
+        XCTAssertEqual(p2, 30.0)
+        XCTAssertEqual(p3, 20.0)
     }
 
-    @Test("Sunburst arc angle sweep calculation")
     func testSunburstArcSweep() {
         let items = [
             HierarchyTestModel(id: "1", name: "Housing", value: 40.0),
@@ -54,8 +51,8 @@ struct HierarchyEngineTests {
         let sweep1 = (items[0].value / total) * 360.0
         let sweep2 = (items[1].value / total) * 360.0
 
-        #expect(sweep1 == 144.0)
-        #expect(sweep2 == 216.0)
-        #expect(sweep1 + sweep2 == 360.0)
+        XCTAssertEqual(sweep1, 144.0)
+        XCTAssertEqual(sweep2, 216.0)
+        XCTAssertEqual(sweep1 + sweep2, 360.0)
     }
 }

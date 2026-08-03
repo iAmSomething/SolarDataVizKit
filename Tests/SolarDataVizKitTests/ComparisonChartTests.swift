@@ -1,6 +1,6 @@
-import Testing
-@testable import SolarDataVizKit
+import XCTest
 import SwiftUI
+@testable import SolarDataVizKit
 
 struct ChartTestModel: SolarVizDataPoint {
     let id: String
@@ -9,10 +9,8 @@ struct ChartTestModel: SolarVizDataPoint {
     let category: String
 }
 
-@Suite("Comparison Chart Component Tests")
-struct ComparisonChartTests {
+final class ComparisonChartTests: XCTestCase {
 
-    @Test("Delta calculation formatting logic")
     @MainActor
     func testDeltaCalculation() {
         let overlay = DeltaTooltipOverlay(
@@ -24,12 +22,11 @@ struct ComparisonChartTests {
             theme: .darkCarbon
         )
 
-        #expect(overlay.xLabel == "Q1")
-        #expect(overlay.valueA == 150.0)
-        #expect(overlay.valueB == 100.0)
+        XCTAssertEqual(overlay.xLabel, "Q1")
+        XCTAssertEqual(overlay.valueA, 150.0)
+        XCTAssertEqual(overlay.valueB, 100.0)
     }
 
-    @Test("Grouped dataset binding for comparison series")
     func testGroupedComparisonBinding() {
         let items = [
             ChartTestModel(id: "1", label: "Jan", revenue: 100.0, category: "Series A"),
@@ -46,7 +43,7 @@ struct ComparisonChartTests {
         )
 
         let grouped = binding.groupedData()
-        #expect(grouped["Series A"]?.count == 2)
-        #expect(grouped["Series B"]?.count == 2)
+        XCTAssertEqual(grouped["Series A"]?.count, 2)
+        XCTAssertEqual(grouped["Series B"]?.count, 2)
     }
 }

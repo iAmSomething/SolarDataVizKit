@@ -1,20 +1,17 @@
-import Testing
-@testable import SolarDataVizKit
+import XCTest
 import CoreGraphics
+@testable import SolarDataVizKit
 
-@Suite("ClusterNodeCalculator Math Tests")
-struct ClusterAlgorithmTests {
+final class ClusterAlgorithmTests: XCTestCase {
 
-    @Test("Euclidean distance calculation test")
     func testDistanceCalculation() {
         let p1 = CGPoint(x: 0, y: 0)
         let p2 = CGPoint(x: 3, y: 4)
 
         let dist = ClusterNodeCalculator.distance(from: p1, to: p2)
-        #expect(abs(dist - 5.0) < 0.001)
+        XCTAssertLessThan(abs(dist - 5.0), 0.001)
     }
 
-    @Test("Clustering close points into merged node")
     func testClusteringClosePoints() {
         let points: [(id: String, point: CGPoint, weight: Double)] = [
             (id: "p1", point: CGPoint(x: 10, y: 10), weight: 1.0),
@@ -24,18 +21,17 @@ struct ClusterAlgorithmTests {
         ]
 
         let clusters = ClusterNodeCalculator.cluster(points: points, thresholdRadius: 20.0)
-        #expect(clusters.count == 2)
+        XCTAssertEqual(clusters.count, 2)
 
         let mergedNode = clusters.first { $0.isMerged }
-        #expect(mergedNode != nil)
+        XCTAssertNotNil(mergedNode)
         if let mergedNode {
-            #expect(mergedNode.count == 3)
-            #expect(mergedNode.childIDs.count == 3)
-            #expect(abs(mergedNode.center.x - 12.333) < 0.1)
+            XCTAssertEqual(mergedNode.count, 3)
+            XCTAssertEqual(mergedNode.childIDs.count, 3)
+            XCTAssertLessThan(abs(mergedNode.center.x - 12.333), 0.1)
         }
     }
 
-    @Test("Far points should remain separate single nodes")
     func testFarPointsNoClustering() {
         let points: [(id: String, point: CGPoint, weight: Double)] = [
             (id: "p1", point: CGPoint(x: 10, y: 10), weight: 1.0),
@@ -44,7 +40,7 @@ struct ClusterAlgorithmTests {
         ]
 
         let clusters = ClusterNodeCalculator.cluster(points: points, thresholdRadius: 30.0)
-        #expect(clusters.count == 3)
-        #expect(clusters.allSatisfy { !$0.isMerged })
+        XCTAssertEqual(clusters.count, 3)
+        XCTAssertTrue(clusters.allSatisfy { !$0.isMerged })
     }
 }

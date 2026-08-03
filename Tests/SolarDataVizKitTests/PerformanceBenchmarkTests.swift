@@ -81,7 +81,7 @@ final class PerformanceBenchmarkTests: XCTestCase {
         let elapsedMS = (CFAbsoluteTimeGetCurrent() - start) * 1000.0
 
         print("⚡ [Benchmark 5K Line Intersections] Found \(crosses.count) cross points in \(String(format: "%.2f", elapsedMS)) ms")
-        XCTAssertLessThan(elapsedMS, 5000.0, "5K line intersections (25M segment pairs) must complete under 5s")
+        XCTAssertLessThan(elapsedMS, 50.0, "5K line intersections must complete under 50ms for real-time 60fps rendering")
     }
 
     // MARK: - 3. Clustering Engine Benchmark (1,000 Points)

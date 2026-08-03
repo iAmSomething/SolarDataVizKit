@@ -1,11 +1,9 @@
-import Testing
-@testable import SolarDataVizKit
+import XCTest
 import CoreGraphics
+@testable import SolarDataVizKit
 
-@Suite("SolarVizLayoutCache Core Tests")
-struct LayoutCacheTests {
+final class LayoutCacheTests: XCTestCase {
 
-    @Test("ClusterNode caching and retrieval test")
     @MainActor
     func testClusterNodeCaching() {
         let cache = SolarVizLayoutCache.shared
@@ -16,15 +14,14 @@ struct LayoutCacheTests {
         ]
 
         let key = "test_key_123"
-        #expect(cache.getClusterNodes(forKey: key) == nil)
+        XCTAssertNil(cache.getClusterNodes(forKey: key))
 
         cache.setClusterNodes(nodes, forKey: key)
         let cached = cache.getClusterNodes(forKey: key)
-        #expect(cached != nil)
-        #expect(cached?.count == 1)
+        XCTAssertNotNil(cached)
+        XCTAssertEqual(cached?.count, 1)
     }
 
-    @Test("IntersectionRegion caching and retrieval test")
     @MainActor
     func testIntersectionRegionCaching() {
         let cache = SolarVizLayoutCache.shared
@@ -37,7 +34,7 @@ struct LayoutCacheTests {
         let key = "intersection_key_456"
         cache.setIntersectionRegions(regions, forKey: key)
         let cached = cache.getIntersectionRegions(forKey: key)
-        #expect(cached != nil)
-        #expect(cached?.count == 1)
+        XCTAssertNotNil(cached)
+        XCTAssertEqual(cached?.count, 1)
     }
 }

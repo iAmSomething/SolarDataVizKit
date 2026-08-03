@@ -47,7 +47,11 @@ public struct DeltaTooltipOverlay: View {
     }
 
     private var percentageDiff: Double {
-        guard valueB != 0 else { return 0 }
+        if valueB == 0 {
+            if valueA > 0 { return 100.0 }
+            if valueA < 0 { return -100.0 }
+            return 0.0
+        }
         return ((valueA - valueB) / abs(valueB)) * 100.0
     }
 
