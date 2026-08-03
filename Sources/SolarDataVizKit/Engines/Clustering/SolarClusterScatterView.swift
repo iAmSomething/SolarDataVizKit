@@ -60,7 +60,7 @@ public struct SolarClusterScatterView<
                 }
                 previousClusterCount = newCount
             }
-            .task(id: "\(binding.data.count)_\(binding.data.first.map { String(describing: $0.id) } ?? "")_\(binding.data.last.map { String(describing: $0.id) } ?? "")_\(clusterRadiusThreshold)_\(size.width)x\(size.height)") {
+            .task(id: "\(binding.dataHash)_\(clusterRadiusThreshold)_\(size.width)x\(size.height)") {
                 await updateClustersOffMainThread(size: size)
             }
         }
@@ -112,9 +112,7 @@ public struct SolarClusterScatterView<
     private func updateClustersOffMainThread(size: CGSize) async {
         guard size.width > 0, size.height > 0 else { return }
 
-        let firstID = binding.data.first.map { String(describing: $0.id) } ?? ""
-        let lastID = binding.data.last.map { String(describing: $0.id) } ?? ""
-        let cacheKey = "cluster_\(binding.data.count)_\(firstID)_\(lastID)_\(clusterRadiusThreshold)_\(Int(size.width))x\(Int(size.height))"
+        let cacheKey = "cluster_\(binding.dataHash)_\(clusterRadiusThreshold)_\(Int(size.width))x\(Int(size.height))"
         if let cached = SolarVizLayoutCache.shared.getClusterNodes(forKey: cacheKey) {
             self.nodes = cached
             return
@@ -126,16 +124,17 @@ public struct SolarClusterScatterView<
 
         // Offload clustering to background thread supporting both Numeric and Categorical (String/Date) XValues
         let calculated = await Task.detached(priority: .userInitiated) { () -> [ClusterNode] in
+            let allNums = localBinding.data.compactMap { Double(String(describing: localBinding.extractX(from: $0))) }
+            let minVal = allNums.min() ?? 0.0
+            let maxVal = allNums.max() ?? 1.0
+            let span = maxVal - minVal
+
             let distinctX = Array(Set(localBinding.data.map { localBinding.extractX(from: $0) }))
             let points = localBinding.data.enumerated().map { (idx, item) -> (id: String, point: CGPoint, weight: Double) in
                 let rawX = localBinding.extractX(from: item)
                 let normX: Double
 
                 if let numX = Double(String(describing: rawX)) {
-                    let allNums = localBinding.data.compactMap { Double(String(describing: localBinding.extractX(from: $0))) }
-                    let minVal = allNums.min() ?? 0
-                    let maxVal = allNums.max() ?? 1
-                    let span = maxVal - minVal
                     normX = span > 0 ? (numX - minVal) / span : 0.5
                 } else {
                     let catIdx = distinctX.firstIndex(of: rawX) ?? 0

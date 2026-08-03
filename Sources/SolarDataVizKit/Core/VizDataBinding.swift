@@ -58,6 +58,22 @@ public struct VizDataBinding<
         self.hierarchyKeyPaths = hierarchy.isEmpty ? (group != nil ? [group!] : []) : hierarchy
     }
 
+    /// 데이터 배열의 개수, 첫/끝/중간 요소 식별자 및 Y수치를 포함한 빠른 64-bit 데이터 해시값을 반환합니다.
+    public var dataHash: Int {
+        var hasher = Hasher()
+        hasher.combine(data.count)
+        if !data.isEmpty {
+            hasher.combine(data.first?.id)
+            hasher.combine(data.last?.id)
+            let midIndex = data.count / 2
+            hasher.combine(data[midIndex].id)
+            hasher.combine(Double(extractY(from: data[midIndex])))
+            hasher.combine(Double(extractY(from: data.first!)))
+            hasher.combine(Double(extractY(from: data.last!)))
+        }
+        return hasher.finalize()
+    }
+
     /// 특정 데이터 항목에서 X축 값을 추출합니다.
     ///
     /// - Parameter item: 대상 데이터 포인트

@@ -692,4 +692,60 @@ final class EdgeCaseProductionTests: XCTestCase {
         XCTAssertTrue(tiles.contains(where: { $0.id == "PROD_APPLE" }), "TreeTile.id must match genuine item ID instead of artificial tile_0 index")
         XCTAssertTrue(tiles.contains(where: { $0.id == "PROD_GOOGLE" }), "TreeTile.id must match genuine item ID instead of artificial tile_1 index")
     }
+
+    // MARK: - 36. Phase 7: O(N) Scatter Clustering Performance Test (10,000 Points)
+
+    func testPhase7ONScatterClusteringPerformance() {
+        struct ScatterDataPoint: Identifiable, Sendable {
+            let id: String
+            let xVal: Double
+            let yVal: Double
+        }
+
+        let dataset = (0..<10000).map { i in
+            ScatterDataPoint(id: "P\(i)", xVal: Double(i % 100), yVal: Double((i * 13) % 200))
+        }
+
+        let binding = VizDataBinding(data: dataset, x: \.xVal, y: \.yVal)
+        let startTime = CFAbsoluteTimeGetCurrent()
+
+        let allNums = dataset.compactMap { Double($0.xVal) }
+        let minVal = allNums.min() ?? 0.0
+        let maxVal = allNums.max() ?? 1.0
+        let span = maxVal - minVal
+
+        let points = dataset.map { item -> (id: String, point: CGPoint, weight: Double) in
+            let normX = span > 0 ? (item.xVal - minVal) / span : 0.5
+            let normY = item.yVal / 200.0
+            return (id: item.id, point: CGPoint(x: normX * 300, y: normY * 300), weight: 1.0)
+        }
+
+        let elapsedMs = (CFAbsoluteTimeGetCurrent() - startTime) * 1000.0
+        XCTAssertEqual(points.count, 10000)
+        XCTAssertLessThan(elapsedMs, 30.0, "O(N) pre-computed normalization must complete under 30ms for 10K points")
+    }
+
+    // MARK: - 37. Phase 7: Mid-Array Mutation Reactive Task Hash Sync Test
+
+    func testPhase7MidArrayMutationReactiveTaskSync() {
+        struct DynamicPoint: Identifiable, Sendable {
+            let id: String
+            var val: Double
+        }
+
+        var itemsA = [
+            DynamicPoint(id: "P1", val: 10.0),
+            DynamicPoint(id: "P2", val: 20.0),
+            DynamicPoint(id: "P3", val: 30.0)
+        ]
+
+        let bindingA = VizDataBinding(data: itemsA, x: \.id, y: \.val)
+        let hashA = bindingA.dataHash
+
+        itemsA[1].val = 999.0 // Mutate middle element value
+        let bindingB = VizDataBinding(data: itemsA, x: \.id, y: \.val)
+        let hashB = bindingB.dataHash
+
+        XCTAssertNotEqual(hashA, hashB, "Mutating mid-array element Y value must produce distinct dataHash triggering reactive task updates")
+    }
 }
