@@ -57,14 +57,42 @@ struct ContentView: View {
         "11. UIKit Hosting Wrapper"
     ]
 
-    var comparisonData: [SolarDefaultDataPoint] {
-        let seriesA = (0..<10).map { i in
-            SolarDefaultDataPoint(xLabel: "M\(i)", value: Double(10 + i * 5), groupIdentifier: "Series A")
+    var groupedComparisonData: [SolarDefaultDataPoint] {
+        let rev = [40.0, 55.0, 65.0, 80.0, 75.0, 95.0, 110.0, 105.0, 125.0, 140.0]
+        let exp = [30.0, 42.0, 50.0, 60.0, 70.0, 78.0, 85.0, 90.0, 98.0, 105.0]
+        let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct"]
+
+        var list: [SolarDefaultDataPoint] = []
+        for i in 0..<months.count {
+            list.append(SolarDefaultDataPoint(xLabel: months[i], value: rev[i], groupIdentifier: "Revenue ($K)"))
+            list.append(SolarDefaultDataPoint(xLabel: months[i], value: exp[i], groupIdentifier: "Expenses ($K)"))
         }
-        let seriesB = (0..<10).map { i in
-            SolarDefaultDataPoint(xLabel: "M\(i)", value: Double(15 + i * 3), groupIdentifier: "Series B")
+        return list
+    }
+
+    var dualSalesData: [SolarDefaultDataPoint] {
+        let months = ["Q1", "Q2", "Q3", "Q4"]
+        let sales = [120.0, 240.0, 380.0, 450.0]
+        return months.indices.map { SolarDefaultDataPoint(xLabel: months[$0], value: sales[$0], groupIdentifier: "Sales") }
+    }
+
+    var dualUsersData: [SolarDefaultDataPoint] {
+        let months = ["Q1", "Q2", "Q3", "Q4"]
+        let users = [15.0, 42.0, 75.0, 98.0]
+        return months.indices.map { SolarDefaultDataPoint(xLabel: months[$0], value: users[$0], groupIdentifier: "Users") }
+    }
+
+    var intersectionWaveData: [SolarDefaultDataPoint] {
+        let months = ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8"]
+        let waveA = [10.0, 80.0, 20.0, 90.0, 30.0, 85.0, 40.0, 95.0]
+        let waveB = [70.0, 15.0, 75.0, 25.0, 80.0, 35.0, 85.0, 45.0]
+
+        var list: [SolarDefaultDataPoint] = []
+        for i in 0..<months.count {
+            list.append(SolarDefaultDataPoint(xLabel: months[i], value: waveA[i], groupIdentifier: "Series Alpha"))
+            list.append(SolarDefaultDataPoint(xLabel: months[i], value: waveB[i], groupIdentifier: "Series Beta"))
         }
-        return seriesA + seriesB
+        return list
     }
 
     var scatterItems: [DemoDataPoint] {
@@ -166,10 +194,12 @@ struct ContentView: View {
                     switch selectedChartIndex {
                     case 0:
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Engine 1: Grouped Comparison Line Chart")
+                            Text("Engine 1: Grouped Line Comparison Chart")
                                 .font(.headline).foregroundColor(.white)
                             SolarComparisonChartView(
-                                binding: VizDataBinding(data: comparisonData, x: \.xLabel, y: \.value, group: \.groupIdentifier),
+                                binding: VizDataBinding(data: groupedComparisonData, x: \.xLabel, y: \.value, group: \.groupIdentifier),
+                                seriesA: "Revenue ($K)",
+                                seriesB: "Expenses ($K)",
                                 initialSelectedIndex: initialDragIndex
                             )
                         }
@@ -179,10 +209,10 @@ struct ContentView: View {
                             Text("Engine 2: Heterogenous Dual Comparison Chart")
                                 .font(.headline).foregroundColor(.white)
                             SolarDualComparisonChartView(
-                                bindingA: VizDataBinding(data: comparisonData.filter { $0.groupIdentifier == "Series A" }, x: \.xLabel, y: \.value),
-                                bindingB: VizDataBinding(data: comparisonData.filter { $0.groupIdentifier == "Series B" }, x: \.xLabel, y: \.value),
-                                labelA: "Sales",
-                                labelB: "Expenses"
+                                bindingA: VizDataBinding(data: dualSalesData, x: \.xLabel, y: \.value),
+                                bindingB: VizDataBinding(data: dualUsersData, x: \.xLabel, y: \.value),
+                                labelA: "Quarterly Sales ($K)",
+                                labelB: "Active Users (K)"
                             )
                         }
                         .padding(16)
@@ -191,7 +221,10 @@ struct ContentView: View {
                             Text("Engine 3: Line Intersection Regions Calculator")
                                 .font(.headline).foregroundColor(.white)
                             SolarComparisonChartView(
-                                binding: VizDataBinding(data: comparisonData, x: \.xLabel, y: \.value, group: \.groupIdentifier)
+                                binding: VizDataBinding(data: intersectionWaveData, x: \.xLabel, y: \.value, group: \.groupIdentifier),
+                                seriesA: "Series Alpha",
+                                seriesB: "Series Beta",
+                                showIntersectionRegions: true
                             )
                         }
                         .padding(16)
@@ -200,8 +233,10 @@ struct ContentView: View {
                             Text("Engine 4: Dynamic Touch Delta Tooltip")
                                 .font(.headline).foregroundColor(.white)
                             SolarComparisonChartView(
-                                binding: VizDataBinding(data: comparisonData, x: \.xLabel, y: \.value, group: \.groupIdentifier),
-                                initialSelectedIndex: 8
+                                binding: VizDataBinding(data: groupedComparisonData, x: \.xLabel, y: \.value, group: \.groupIdentifier),
+                                seriesA: "Revenue ($K)",
+                                seriesB: "Expenses ($K)",
+                                initialSelectedIndex: 5
                             )
                         }
                         .padding(16)

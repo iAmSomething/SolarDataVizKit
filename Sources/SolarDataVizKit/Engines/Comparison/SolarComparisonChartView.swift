@@ -36,17 +36,20 @@ public struct SolarComparisonChartView<
     @State private var previousCrossIndex: Int?
 
     public let initialSelectedIndex: Int?
+    public let showIntersectionRegions: Bool
 
     public init(
         binding: VizDataBinding<Item, XValue, YValue>,
         seriesA: String = "Series A",
         seriesB: String = "Series B",
-        initialSelectedIndex: Int? = nil
+        initialSelectedIndex: Int? = nil,
+        showIntersectionRegions: Bool = false
     ) {
         self.binding = binding
         self.seriesA = seriesA
         self.seriesB = seriesB
         self.initialSelectedIndex = initialSelectedIndex
+        self.showIntersectionRegions = showIntersectionRegions
         self._selectedIndex = State(initialValue: initialSelectedIndex)
 
         // Cache grouped items once during init to prevent 60Hz main-thread re-grouping on body re-evaluations
@@ -103,6 +106,28 @@ public struct SolarComparisonChartView<
                     let colorB = theme.seriesColors.dropFirst().first ?? Color(red: 56/255, green: 189/255, blue: 248/255)
 
                     Chart {
+                        if showIntersectionRegions {
+                            ForEach(itemsA) { item in
+                                let xVal = binding.extractX(from: item)
+                                let yVal = binding.extractY(from: item)
+                                AreaMark(
+                                    x: .value("X", xVal.description),
+                                    y: .value("Y", Double(yVal))
+                                )
+                                .foregroundStyle(LinearGradient(colors: [colorA.opacity(0.35), colorA.opacity(0.05)], startPoint: .top, endPoint: .bottom))
+                            }
+
+                            ForEach(itemsB) { item in
+                                let xVal = binding.extractX(from: item)
+                                let yVal = binding.extractY(from: item)
+                                AreaMark(
+                                    x: .value("X", xVal.description),
+                                    y: .value("Y", Double(yVal))
+                                )
+                                .foregroundStyle(LinearGradient(colors: [colorB.opacity(0.25), colorB.opacity(0.02)], startPoint: .top, endPoint: .bottom))
+                            }
+                        }
+
                         // Draw Series A (Solid Line - Orange)
                         ForEach(itemsA) { item in
                             let xVal = binding.extractX(from: item)
