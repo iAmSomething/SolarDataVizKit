@@ -315,4 +315,20 @@ final class EdgeCaseProductionTests: XCTestCase {
         let sunburst = SolarSunburstView(binding: binding)
         XCTAssertNotNil(sunburst)
     }
+
+    // MARK: - 19. Single Pass O(N) sortedGroupedData Test
+
+    func testSinglePassSortedGroupedDataEfficiency() {
+        let items = (0..<100_000).map { i in
+            ProductionEdgeItem(id: "\(i)", xLabel: "Label_\(i)", yValue: Double(i), category: "Cat_\(i % 5)", subCategory: "Sub_\(i % 10)")
+        }
+
+        let binding = VizDataBinding(data: items, x: \.xLabel, y: \.yValue, group: \.category)
+        let start = Date()
+        let grouped = binding.sortedGroupedData()
+        let elapsedMS = Date().timeIntervalSince(start) * 1000.0
+
+        XCTAssertEqual(grouped.count, 5)
+        XCTAssertLessThan(elapsedMS, 50.0, "Single-pass O(N) sortedGroupedData must complete 100,000 items under 50ms")
+    }
 }

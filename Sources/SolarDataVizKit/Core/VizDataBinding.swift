@@ -115,10 +115,24 @@ public struct VizDataBinding<
         return dict
     }
 
-    /// 결정론적(Deterministic) 순서가 보장된 그룹별 데이터 배열을 반환합니다.
+    /// 단 한 번의 루프(Single-Pass O(N))로 결정론적 순서의 그룹별 데이터 배열을 구합니다.
     public func sortedGroupedData() -> [(key: String, items: [Item])] {
-        let dict = groupedData()
-        return sortedGroupKeys.compactMap { key in
+        guard let groupKeyPath else {
+            return [("Default", data)]
+        }
+
+        var dict: [String: [Item]] = [:]
+        var keys: [String] = []
+
+        for item in data {
+            let key = item[keyPath: groupKeyPath]
+            if dict[key] == nil {
+                keys.append(key)
+            }
+            dict[key, default: []].append(item)
+        }
+
+        return keys.compactMap { key in
             guard let items = dict[key] else { return nil }
             return (key: key, items: items)
         }

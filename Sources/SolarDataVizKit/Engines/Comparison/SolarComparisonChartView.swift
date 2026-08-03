@@ -177,6 +177,14 @@ public struct SolarComparisonChartView<
                 .gesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { value in
+                            // Canvas Hit-Testing bounds check: dismiss ghost tooltips when dragging outside chart area
+                            guard value.location.x >= 0 && value.location.x <= containerWidth && value.location.y >= 0 && value.location.y <= geometry.size.height else {
+                                if selectedIndex != nil {
+                                    selectedIndex = nil
+                                }
+                                return
+                            }
+
                             let totalCount = max(itemsA.count, 1)
                             let ratio = min(max(value.location.x / containerWidth, 0.0), 1.0)
                             let index = min(max(Int(round(ratio * CGFloat(totalCount - 1))), 0), totalCount - 1)
@@ -203,9 +211,19 @@ public struct SolarComparisonChartView<
     }
 
     private func checkIntersectionHaptic(at index: Int) {
-        guard index > 0, index < itemsA.count, index < itemsB.count else { return }
-        let prevDiff = Double(binding.extractY(from: itemsA[index - 1])) - Double(binding.extractY(from: itemsB[index - 1]))
-        let currDiff = Double(binding.extractY(from: itemsA[index])) - Double(binding.extractY(from: itemsB[index]))
+        guard index > 0, index < itemsA.count else { return }
+        let currA = itemsA[index]
+        let prevA = itemsA[index - 1]
+
+        let keyCurr = binding.extractX(from: currA).description
+        let keyPrev = binding.extractX(from: prevA).description
+
+        // Key-based join lookup for series B matching exact X-keys preventing out-of-range crashes
+        guard let currB = itemsB.first(where: { binding.extractX(from: $0).description == keyCurr }),
+              let prevB = itemsB.first(where: { binding.extractX(from: $0).description == keyPrev }) else { return }
+
+        let prevDiff = Double(binding.extractY(from: prevA)) - Double(binding.extractY(from: prevB))
+        let currDiff = Double(binding.extractY(from: currA)) - Double(binding.extractY(from: currB))
 
         // Check for sign flip (intersection crossing)
         if (prevDiff >= 0 && currDiff < 0) || (prevDiff < 0 && currDiff >= 0) {
