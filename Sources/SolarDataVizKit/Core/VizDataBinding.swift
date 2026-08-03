@@ -220,14 +220,14 @@ public struct HierarchyNode<Item: Sendable>: Identifiable, Sendable {
     public let item: Item?
 
     public init(
-        id: String = UUID().uuidString,
+        id: String? = nil,
         name: String,
         value: Double,
         level: Int = 0,
         children: [HierarchyNode<Item>] = [],
         item: Item? = nil
     ) {
-        self.id = id
+        self.id = id ?? "node_l\(level)_\(name)"
         self.name = name
         self.value = value
         self.level = level

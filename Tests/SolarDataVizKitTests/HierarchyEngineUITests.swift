@@ -25,7 +25,8 @@ final class HierarchyEngineUITests: XCTestCase {
         )
 
         let treeMapView = SolarTreeMapView(binding: binding)
-        XCTAssertNotNil(treeMapView)
+        let geometry = try treeMapView.inspect().geometryReader()
+        XCTAssertNotNil(geometry, "SolarTreeMapView must render inside a dynamic GeometryReader for responsive tile tiling")
     }
 
     @MainActor
@@ -48,6 +49,7 @@ final class HierarchyEngineUITests: XCTestCase {
         )
 
         let sunburstView = SolarSunburstView(binding: binding)
-        XCTAssertNotNil(sunburstView)
+        let geometry = try sunburstView.inspect().geometryReader()
+        XCTAssertNotNil(geometry, "SolarSunburstView must render inside a dynamic GeometryReader for radial arc calculations")
     }
 }

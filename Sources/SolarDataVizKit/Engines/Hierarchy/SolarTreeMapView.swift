@@ -143,6 +143,7 @@ public struct SolarTreeMapView<
         func layoutRow(row: [(item: Item, val: Double)], in rect: inout CGRect) {
             guard !row.isEmpty else { return }
             let sumVal = row.reduce(0.0) { $0 + $1.val }
+            guard sumVal > 0 else { return }
             let rowFraction = sumVal / totalValue
             let totalBoundsArea = bounds.width * bounds.height
             let rowArea = CGFloat(rowFraction) * totalBoundsArea
