@@ -63,6 +63,7 @@ public struct SolarSunburstView<
 
     @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
     @State private var selectedArcID: String?
+    @State private var cachedArcs: [SunburstArc<Item>] = []
 
     public init(
         binding: VizDataBinding<Item, XValue, YValue>,
@@ -78,7 +79,7 @@ public struct SolarSunburstView<
         GeometryReader { geometry in
             let center = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
             let maxRadius = min(geometry.size.width, geometry.size.height) / 2
-            let arcs = computeArcs(center: center, maxRadius: maxRadius)
+            let arcs = cachedArcs.isEmpty ? computeArcs(center: center, maxRadius: maxRadius) : cachedArcs
 
             ZStack {
                 ForEach(arcs) { arc in
@@ -98,12 +99,18 @@ public struct SolarSunburstView<
                             .font(.system(size: 12, weight: .bold, design: .rounded))
                             .foregroundColor(theme.accentColor)
                     } else {
-                        Text("\(binding.data.count) Items")
-                            .font(.system(size: 13, weight: .bold))
+                        Text("100%")
+                            .font(.system(size: 14, weight: .bold, design: .rounded))
                             .foregroundColor(theme.primaryTextColor)
                     }
                 }
             }
+        }
+        .task(id: binding.dataHash) {
+            // Pre-calculate arcs once off main thread / on task sync to prevent 60fps GeometryReader grouping bottlenecks
+            let dummyCenter = CGPoint(x: 150, y: 150)
+            let dummyRadius: CGFloat = 150
+            self.cachedArcs = computeArcs(center: dummyCenter, maxRadius: dummyRadius)
         }
         .background(
             RoundedRectangle(cornerRadius: environmentTheme.cornerRadius)
@@ -114,8 +121,8 @@ public struct SolarSunburstView<
                 .stroke(environmentTheme.borderColor, lineWidth: 1)
         )
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Hierarchical Sunburst Chart")
-        .accessibilityValue("\(binding.sortedGroupKeys.count) parent categories, \(binding.data.count) total child items")
+        .accessibilityLabel("Concentric Sunburst Donut Chart")
+        .accessibilityValue("\(binding.data.count) data elements")
     }
 
     @ViewBuilder
@@ -201,10 +208,10 @@ public struct SolarSunburstView<
             let groupEndAngle = currentAngle + groupSweep
             let groupPct = (groupSum / totalValue) * 100.0
 
-            // 1. Parent Level Arc (Inner Ring) - Full Color Saturation
+            // 1. Parent Level Arc (Inner Ring) - Stable Index-Free Unique ID
             if let firstItem = groupItems.first {
                 arcs.append(SunburstArc(
-                    id: "parent_\(groupIndex)_\(groupName)",
+                    id: "sunburst_parent_\(groupName)",
                     item: firstItem,
                     startAngle: Angle(degrees: groupStartAngle),
                     endAngle: Angle(degrees: groupEndAngle),
@@ -218,7 +225,7 @@ public struct SolarSunburstView<
                 ))
             }
 
-            // 2. Child Level Arcs (Outer Ring) - Inherits Parent Category Color Family
+            // 2. Child Level Arcs (Outer Ring) - Stable Index-Free Unique ID
             var childAngle = groupStartAngle
             for (itemIndex, item) in groupItems.enumerated() {
                 let val = max(0.0, Double(binding.extractY(from: item)))
@@ -231,7 +238,7 @@ public struct SolarSunburstView<
                 let itemLabel = binding.extractX(from: item).description
 
                 arcs.append(SunburstArc(
-                    id: "child_\(groupName)_\(String(describing: item.id))",
+                    id: "sunburst_child_\(item.id)",
                     item: item,
                     startAngle: itemStartA,
                     endAngle: itemEndA,

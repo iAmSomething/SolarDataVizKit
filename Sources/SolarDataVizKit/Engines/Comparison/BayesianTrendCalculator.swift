@@ -70,7 +70,7 @@ public struct BayesianTrendCalculator: Sendable {
 
         let sampledPoints: [CGPoint]
         if sorted.count > 500 {
-            let strideStep = max(sorted.count / 500, 1)
+            let strideStep = max(Int(ceil(Double(sorted.count) / 500.0)), 1)
             sampledPoints = sorted.enumerated().compactMap { $0.offset % strideStep == 0 ? $0.element : nil }
         } else {
             sampledPoints = sorted
@@ -126,17 +126,21 @@ public struct BayesianTrendCalculator: Sendable {
             var totalW = 0.0
             var meanY = 0.0
             var minDist2 = Double.greatestFiniteMagnitude
+            var closestIdx = 0
 
             for i in 0..<n {
                 let dx = curX - xs[i]
                 let dist2 = dx * dx
-                if dist2 < minDist2 { minDist2 = dist2 }
+                if dist2 < minDist2 {
+                    minDist2 = dist2
+                    closestIdx = i
+                }
                 let w = exp(-dist2 / l2)
                 totalW += w
                 meanY += w * ys[i]
             }
 
-            let mu = totalW > 1e-9 ? meanY / totalW : ys.first!
+            let mu = totalW > 1e-9 ? meanY / totalW : ys[closestIdx]
 
             // Distance-based Bayesian Uncertainty expansion: \(\sigma(x_*) = \sqrt{s^2 (1 + d_{min}^2 / l^2)}\)
             let distLeverage = sqrt(minDist2) / max(lengthScale, 1e-6)

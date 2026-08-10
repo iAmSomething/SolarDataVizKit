@@ -8,6 +8,12 @@ struct DemoDataPoint: SolarVizDataPoint {
     let category: String
 }
 
+struct BayesianDemoPoint: SolarVizDataPoint {
+    let id: String
+    let xVal: Double
+    let yVal: Double
+}
+
 @main
 struct SolarDataVizDemoApp: App {
     var initialIndex: Int {
@@ -28,8 +34,11 @@ struct SolarDataVizDemoApp: App {
         return 0
     }
 
-    private var initialBayesPreset: Int {
+    private var initialPresetMode: Int {
         let args = ProcessInfo.processInfo.arguments
+        if let idx = args.firstIndex(of: "--preset"), idx + 1 < args.count {
+            return Int(args[idx + 1]) ?? 0
+        }
         if let idx = args.firstIndex(of: "--bayes-preset"), idx + 1 < args.count {
             return Int(args[idx + 1]) ?? 0
         }
@@ -38,7 +47,7 @@ struct SolarDataVizDemoApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView(selectedChartIndex: initialIndex, initialBayesPreset: initialBayesPreset)
+            ContentView(selectedChartIndex: initialIndex, initialPresetMode: initialPresetMode)
                 .preferredColorScheme(.dark)
         }
     }
@@ -46,11 +55,11 @@ struct SolarDataVizDemoApp: App {
 
 struct ContentView: View {
     @State var selectedChartIndex: Int
-    @State private var bayesianPresetIndex: Int
+    @State private var presetMode: Int // 0: Ideal Clean, 1: Evil Worst-Case
 
-    init(selectedChartIndex: Int = 0, initialBayesPreset: Int = 0) {
+    init(selectedChartIndex: Int = 0, initialPresetMode: Int = 0) {
         _selectedChartIndex = State(initialValue: selectedChartIndex)
-        _bayesianPresetIndex = State(initialValue: initialBayesPreset)
+        _presetMode = State(initialValue: initialPresetMode)
     }
 
     let chartTitles = [
@@ -67,53 +76,55 @@ struct ContentView: View {
         "11. UIKit Hosting Wrapper",
         "12. Bayesian Numerical Trend & Uncertainty Band"
     ]
-    var bayesianFriendlyData: [SolarDefaultDataPoint] {
-        let xs = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
-        let ys = [12.0, 19.0, 22.0, 35.0, 41.0, 50.0, 58.0, 69.0, 75.0, 91.0]
-        return xs.indices.map { SolarDefaultDataPoint(xLabel: String(xs[$0]), value: ys[$0]) }
-    }
 
-    var bayesianEvilVolatileData: [SolarDefaultDataPoint] {
-        let xs = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
-        let ys = [5.0, 85.0, 12.0, 140.0, 25.0, 190.0, 30.0, 220.0, 45.0, 310.0]
-        return xs.indices.map { SolarDefaultDataPoint(xLabel: String(xs[$0]), value: ys[$0]) }
-    }
-
-    var bayesianZeroVarianceData: [SolarDefaultDataPoint] {
-        let xs = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
-        let ys = [50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0]
-        return xs.indices.map { SolarDefaultDataPoint(xLabel: String(xs[$0]), value: ys[$0]) }
-    }
-
-    var groupedComparisonData: [SolarDefaultDataPoint] {
-        let rev = [40.0, 55.0, 65.0, 80.0, 75.0, 95.0, 110.0, 105.0, 125.0, 140.0]
-        let exp = [30.0, 42.0, 50.0, 60.0, 70.0, 78.0, 85.0, 90.0, 98.0, 105.0]
+    // MARK: - Engine 1: Grouped Line Comparison Data
+    var engine1Data: [SolarDefaultDataPoint] {
         let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct"]
-
-        var list: [SolarDefaultDataPoint] = []
-        for i in 0..<months.count {
-            list.append(SolarDefaultDataPoint(xLabel: months[i], value: rev[i], groupIdentifier: "Revenue ($K)"))
-            list.append(SolarDefaultDataPoint(xLabel: months[i], value: exp[i], groupIdentifier: "Expenses ($K)"))
+        if presetMode == 0 {
+            // Ideal Clean
+            let rev = [40.0, 55.0, 65.0, 80.0, 75.0, 95.0, 110.0, 105.0, 125.0, 140.0]
+            let exp = [30.0, 42.0, 50.0, 60.0, 70.0, 78.0, 85.0, 90.0, 98.0, 105.0]
+            var list: [SolarDefaultDataPoint] = []
+            for i in 0..<months.count {
+                list.append(SolarDefaultDataPoint(xLabel: months[i], value: rev[i], groupIdentifier: "Revenue ($K)"))
+                list.append(SolarDefaultDataPoint(xLabel: months[i], value: exp[i], groupIdentifier: "Expenses ($K)"))
+            }
+            return list
+        } else {
+            // Evil Worst-Case (Negative Spikes & High Volatility)
+            let rev = [-20.0, 180.0, -90.0, 310.0, 10.0, -150.0, 420.0, -50.0, 290.0, -10.0]
+            let exp = [80.0, -40.0, 210.0, -30.0, 190.0, 80.0, -10.0, 300.0, -80.0, 120.0]
+            var list: [SolarDefaultDataPoint] = []
+            for i in 0..<months.count {
+                list.append(SolarDefaultDataPoint(xLabel: months[i], value: rev[i], groupIdentifier: "Revenue ($K)"))
+                list.append(SolarDefaultDataPoint(xLabel: months[i], value: exp[i], groupIdentifier: "Expenses ($K)"))
+            }
+            return list
         }
-        return list
     }
 
-    var dualSalesData: [SolarDefaultDataPoint] {
-        let months = ["Q1", "Q2", "Q3", "Q4"]
-        let sales = [120.0, 240.0, 380.0, 450.0]
-        return months.indices.map { SolarDefaultDataPoint(xLabel: months[$0], value: sales[$0], groupIdentifier: "Sales") }
+    // MARK: - Engine 2: Heterogenous Dual Comparison Data
+    var engine2SalesData: [SolarDefaultDataPoint] {
+        let labels = ["Q1", "Q2", "Q3", "Q4"]
+        let sales = presetMode == 0 ? [120.0, 240.0, 380.0, 450.0] : [10_000_000.0, 25_000_000.0, 80_000_000.0, 150_000_000.0]
+        return labels.indices.map { SolarDefaultDataPoint(xLabel: labels[$0], value: sales[$0], groupIdentifier: "Enterprise ARR ($)") }
     }
 
-    var dualUsersData: [SolarDefaultDataPoint] {
-        let months = ["Q1", "Q2", "Q3", "Q4"]
-        let users = [15.0, 42.0, 75.0, 98.0]
-        return months.indices.map { SolarDefaultDataPoint(xLabel: months[$0], value: users[$0], groupIdentifier: "Users") }
+    var engine2UsersData: [SolarDefaultDataPoint] {
+        let labels = ["Q1", "Q2", "Q3", "Q4"]
+        let users = presetMode == 0 ? [15.0, 42.0, 75.0, 98.0] : [0.0001, 0.0005, 0.0002, 0.0009]
+        return labels.indices.map { SolarDefaultDataPoint(xLabel: labels[$0], value: users[$0], groupIdentifier: "Conversion Rate (%)") }
     }
 
-    var intersectionWaveData: [SolarDefaultDataPoint] {
+    // MARK: - Engine 3: Line Intersection Wave Data
+    var engine3Data: [SolarDefaultDataPoint] {
         let months = ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8"]
-        let waveA = [10.0, 80.0, 20.0, 90.0, 30.0, 85.0, 40.0, 95.0]
-        let waveB = [70.0, 15.0, 75.0, 25.0, 80.0, 35.0, 85.0, 45.0]
+        let waveA = presetMode == 0 ?
+            [10.0, 80.0, 20.0, 90.0, 30.0, 85.0, 40.0, 95.0] :
+            [90.0, 10.0, 85.0, 15.0, 80.0, 20.0, 95.0, 5.0]
+        let waveB = presetMode == 0 ?
+            [70.0, 15.0, 75.0, 25.0, 80.0, 35.0, 85.0, 45.0] :
+            [10.0, 95.0, 15.0, 85.0, 20.0, 90.0, 5.0, 98.0]
 
         var list: [SolarDefaultDataPoint] = []
         for i in 0..<months.count {
@@ -123,24 +134,83 @@ struct ContentView: View {
         return list
     }
 
+    // MARK: - Engine 4: Touch Tooltip Scrub Index
+    var engine4TouchIndex: Int {
+        return presetMode == 0 ? 5 : 0 // Ideal: Mid-point (5), Evil: Leftmost Boundary (0)
+    }
+
+    // MARK: - Engine 5 & 7: Scatter Items
     var scatterItems: [DemoDataPoint] {
-        (0..<40).map { i in
-            DemoDataPoint(
-                id: "\(i)",
-                xLabel: "Pt_\(i)",
-                value: Double(20 + (i * 17) % 180),
-                category: "Group_\(i % 3)"
-            )
+        if presetMode == 0 {
+            // Ideal Clean 4 Clusters
+            return (0..<40).map { i in
+                DemoDataPoint(
+                    id: "\(i)",
+                    xLabel: "Pt_\(i)",
+                    value: Double(20 + (i * 17) % 180),
+                    category: "Group_\(i % 3)"
+                )
+            }
+        } else {
+            // Evil Worst-Case Overlapping High Outliers
+            return (0..<100).map { i in
+                let val = i == 50 ? 999_999.0 : Double((i * 31) % 50)
+                return DemoDataPoint(
+                    id: "evil_\(i)",
+                    xLabel: "Evil_\(i)",
+                    value: val,
+                    category: "Evil_\(i % 5)"
+                )
+            }
         }
     }
 
+    // MARK: - Engine 6: Density Heatmap Nodes
+    var heatmapNodes: [ClusterNode] {
+        if presetMode == 0 {
+            return [
+                ClusterNode(id: "n1", center: CGPoint(x: 120, y: 100), radius: 25, childIDs: ["1"], count: 10),
+                ClusterNode(id: "n2", center: CGPoint(x: 180, y: 160), radius: 35, childIDs: ["2"], count: 18)
+            ]
+        } else {
+            return [
+                ClusterNode(id: "ev1", center: CGPoint(x: 50, y: 50), radius: 5, childIDs: ["1"], count: 50),
+                ClusterNode(id: "ev2", center: CGPoint(x: 52, y: 51), radius: 8, childIDs: ["2"], count: 90),
+                ClusterNode(id: "ev3", center: CGPoint(x: 220, y: 220), radius: 140, childIDs: ["3"], count: 2)
+            ]
+        }
+    }
+
+    // MARK: - Engine 8, 9, 10: Hierarchy Items
     var hierarchyItems: [DemoDataPoint] {
-        [
-            DemoDataPoint(id: "1", xLabel: "iOS", value: 450.0, category: "Engineering"),
-            DemoDataPoint(id: "2", xLabel: "macOS", value: 250.0, category: "Engineering"),
-            DemoDataPoint(id: "3", xLabel: "Services", value: 180.0, category: "Cloud"),
-            DemoDataPoint(id: "4", xLabel: "Cloud AI", value: 120.0, category: "Cloud")
-        ]
+        if presetMode == 0 {
+            return [
+                DemoDataPoint(id: "1", xLabel: "iOS", value: 450.0, category: "Engineering"),
+                DemoDataPoint(id: "2", xLabel: "macOS", value: 250.0, category: "Engineering"),
+                DemoDataPoint(id: "3", xLabel: "Services", value: 180.0, category: "Cloud"),
+                DemoDataPoint(id: "4", xLabel: "Cloud AI", value: 120.0, category: "Cloud")
+            ]
+        } else {
+            return [
+                DemoDataPoint(id: "ev1", xLabel: "Giant Core", value: 100_000.0, category: "Core"),
+                DemoDataPoint(id: "ev2", xLabel: "Zero Tile", value: 0.0, category: "Edge"),
+                DemoDataPoint(id: "ev3", xLabel: "Micro Tile", value: 0.0001, category: "Edge"),
+                DemoDataPoint(id: "ev4", xLabel: "Nano Tile", value: 0.00001, category: "Edge")
+            ]
+        }
+    }
+
+    // MARK: - Engine 12: Bayesian Trend Points
+    var bayesianTrendData: [BayesianDemoPoint] {
+        if presetMode == 0 {
+            let xs = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
+            let ys = [12.0, 19.0, 22.0, 35.0, 41.0, 50.0, 58.0, 69.0, 75.0, 91.0]
+            return xs.indices.map { BayesianDemoPoint(id: "\($0)", xVal: xs[$0], yVal: ys[$0]) }
+        } else {
+            let xs = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
+            let ys = [5.0, 310.0, 12.0, 290.0, 18.0, 410.0, 25.0, 380.0, 30.0, 450.0]
+            return xs.indices.map { BayesianDemoPoint(id: "\($0)", xVal: xs[$0], yVal: ys[$0]) }
+        }
     }
 
     var initialDragIndex: Int? {
@@ -170,19 +240,24 @@ struct ContentView: View {
                         Text("SolarDataVizKit")
                             .font(.system(size: 24, weight: .bold, design: .rounded))
                             .foregroundColor(Color(red: 245/255, green: 244/255, blue: 242/255))
-                        Text("11 Core Visualization Engines Catalog")
+                        Text("12 Core Visualization Engines Catalog")
                             .font(.system(size: 13, weight: .medium))
                             .foregroundColor(Color(red: 138/255, green: 136/255, blue: 133/255))
                     }
                     Spacer()
-                    Image(systemName: "square.grid.3x3.fill")
-                        .font(.title2)
-                        .foregroundColor(Color(red: 255/255, green: 107/255, blue: 0/255))
+
+                    // Preset Mode Selector (Ideal vs Evil)
+                    Picker("Preset", selection: $presetMode) {
+                        Text("Ideal").tag(0)
+                        Text("Evil").tag(1)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 120)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
 
-                // 11 Chart Engine Picker Menu
+                // 12 Chart Engine Picker Menu
                 Menu {
                     ForEach(0..<chartTitles.count, id: \.self) { idx in
                         Button(chartTitles[idx]) {
@@ -222,10 +297,10 @@ struct ContentView: View {
                     switch selectedChartIndex {
                     case 0:
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Engine 1: Grouped Line Comparison Chart")
+                            Text("Engine 1: Grouped Line Comparison Chart (\(presetMode == 0 ? "Ideal" : "Evil"))")
                                 .font(.headline).foregroundColor(.white)
                             SolarComparisonChartView(
-                                binding: VizDataBinding(data: groupedComparisonData, x: \.xLabel, y: \.value, group: \.groupIdentifier),
+                                binding: VizDataBinding(data: engine1Data, x: \.xLabel, y: \.value, group: \.groupIdentifier),
                                 seriesA: "Revenue ($K)",
                                 seriesB: "Expenses ($K)",
                                 initialSelectedIndex: initialDragIndex
@@ -234,22 +309,22 @@ struct ContentView: View {
                         .padding(16)
                     case 1:
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Engine 2: Heterogenous Dual Comparison Chart")
+                            Text("Engine 2: Heterogenous Dual Comparison Chart (\(presetMode == 0 ? "Ideal" : "Evil"))")
                                 .font(.headline).foregroundColor(.white)
                             SolarDualComparisonChartView(
-                                bindingA: VizDataBinding(data: dualSalesData, x: \.xLabel, y: \.value),
-                                bindingB: VizDataBinding(data: dualUsersData, x: \.xLabel, y: \.value),
-                                labelA: "Quarterly Sales ($K)",
-                                labelB: "Active Users (K)"
+                                bindingA: VizDataBinding(data: engine2SalesData, x: \.xLabel, y: \.value),
+                                bindingB: VizDataBinding(data: engine2UsersData, x: \.xLabel, y: \.value),
+                                labelA: "Enterprise ARR ($)",
+                                labelB: "Conversion Rate (%)"
                             )
                         }
                         .padding(16)
                     case 2:
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Engine 3: Line Intersection Regions Calculator")
+                            Text("Engine 3: Line Intersection Regions Calculator (\(presetMode == 0 ? "Ideal" : "Evil"))")
                                 .font(.headline).foregroundColor(.white)
                             SolarComparisonChartView(
-                                binding: VizDataBinding(data: intersectionWaveData, x: \.xLabel, y: \.value, group: \.groupIdentifier),
+                                binding: VizDataBinding(data: engine3Data, x: \.xLabel, y: \.value, group: \.groupIdentifier),
                                 seriesA: "Series Alpha",
                                 seriesB: "Series Beta",
                                 showIntersectionRegions: true
@@ -258,19 +333,19 @@ struct ContentView: View {
                         .padding(16)
                     case 3:
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Engine 4: Dynamic Touch Delta Tooltip")
+                            Text("Engine 4: Dynamic Touch Delta Tooltip (\(presetMode == 0 ? "Ideal" : "Evil"))")
                                 .font(.headline).foregroundColor(.white)
                             SolarComparisonChartView(
-                                binding: VizDataBinding(data: groupedComparisonData, x: \.xLabel, y: \.value, group: \.groupIdentifier),
+                                binding: VizDataBinding(data: engine1Data, x: \.xLabel, y: \.value, group: \.groupIdentifier),
                                 seriesA: "Revenue ($K)",
                                 seriesB: "Expenses ($K)",
-                                initialSelectedIndex: 5
+                                initialSelectedIndex: engine4TouchIndex
                             )
                         }
                         .padding(16)
                     case 4:
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Engine 5: Distance Cluster Scatter Plot")
+                            Text("Engine 5: Distance Cluster Scatter Plot (\(presetMode == 0 ? "Ideal" : "Evil"))")
                                 .font(.headline).foregroundColor(.white)
                             SolarClusterScatterView(
                                 binding: VizDataBinding(data: scatterItems, x: \.xLabel, y: \.value, group: \.category)
@@ -279,19 +354,16 @@ struct ContentView: View {
                         .padding(16)
                     case 5:
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Engine 6: Gaussian Density Heatmap Overlay")
+                            Text("Engine 6: Gaussian Density Heatmap Overlay (\(presetMode == 0 ? "Ideal" : "Evil"))")
                                 .font(.headline).foregroundColor(.white)
                             DensityHeatmapView(
-                                nodes: [
-                                    ClusterNode(id: "n1", center: CGPoint(x: 120, y: 100), radius: 25, childIDs: ["1"], count: 10),
-                                    ClusterNode(id: "n2", center: CGPoint(x: 180, y: 160), radius: 35, childIDs: ["2"], count: 18)
-                                ]
+                                nodes: heatmapNodes
                             )
                         }
                         .padding(16)
                     case 6:
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Engine 7: Centroid Cluster Node Aggregator")
+                            Text("Engine 7: Centroid Cluster Node Aggregator (\(presetMode == 0 ? "Ideal" : "Evil"))")
                                 .font(.headline).foregroundColor(.white)
                             SolarClusterScatterView(
                                 binding: VizDataBinding(data: scatterItems, x: \.xLabel, y: \.value, group: \.category)
@@ -300,7 +372,7 @@ struct ContentView: View {
                         .padding(16)
                     case 7:
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Engine 8: Squarified TreeMap Hierarchy")
+                            Text("Engine 8: Squarified TreeMap Hierarchy (\(presetMode == 0 ? "Ideal" : "Evil"))")
                                 .font(.headline).foregroundColor(.white)
                             SolarTreeMapView(
                                 binding: VizDataBinding(data: hierarchyItems, x: \.xLabel, y: \.value),
@@ -310,7 +382,7 @@ struct ContentView: View {
                         .padding(16)
                     case 8:
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Engine 9: Concentric Sunburst Arc Donut")
+                            Text("Engine 9: Concentric Sunburst Arc Donut (\(presetMode == 0 ? "Ideal" : "Evil"))")
                                 .font(.headline).foregroundColor(.white)
                             SolarSunburstView(
                                 binding: VizDataBinding(data: hierarchyItems, x: \.xLabel, y: \.value, group: \.category),
@@ -320,57 +392,32 @@ struct ContentView: View {
                         .padding(16)
                     case 9:
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Engine 10: Slice & Dice TreeMap Strategy")
+                            Text("Engine 10: Slice & Dice TreeMap Layout (\(presetMode == 0 ? "Ideal" : "Evil"))")
                                 .font(.headline).foregroundColor(.white)
                             SolarTreeMapView(
-                                binding: VizDataBinding(data: hierarchyItems, x: \.xLabel, y: \.value)
+                                binding: VizDataBinding(data: hierarchyItems, x: \.xLabel, y: \.value),
+                                strategy: SliceAndDiceTreemapStrategy()
                             )
                         }
                         .padding(16)
                     case 10:
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Engine 11: UIKit UIViewController Hosting Wrapper")
+                            Text("Engine 11: UIKit Hosting Wrapper (\(presetMode == 0 ? "Ideal" : "Evil"))")
                                 .font(.headline).foregroundColor(.white)
-                            SolarTreeMapView(
-                                binding: VizDataBinding(data: hierarchyItems, x: \.xLabel, y: \.value)
+                            SolarUIKitHostingWrapperView(binding: VizDataBinding(data: engine1Data, x: \.xLabel, y: \.value, group: \.groupIdentifier))
+                        }
+                        .padding(16)
+                    case 11:
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Engine 12: Bayesian RBF Trend & Uncertainty (\(presetMode == 0 ? "Ideal" : "Evil"))")
+                                .font(.headline).foregroundColor(.white)
+                            SolarBayesianTrendView(
+                                binding: VizDataBinding(data: bayesianTrendData, x: \.xVal, y: \.yVal)
                             )
                         }
                         .padding(16)
                     default:
-                        let currentData = bayesianPresetIndex == 0 ? bayesianFriendlyData : (bayesianPresetIndex == 1 ? bayesianEvilVolatileData : bayesianZeroVarianceData)
-                        let presetTitle = bayesianPresetIndex == 0 ? "1. Friendly Growth Trend" : (bayesianPresetIndex == 1 ? "2. Evil Volatile Outlier Spikes" : "3. Zero-Variance Flat Line Defense")
-
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Text("Engine 12: Bayesian Numerical Trend")
-                                    .font(.headline).foregroundColor(.white)
-                                Spacer()
-                                Text(presetTitle)
-                                    .font(.system(size: 11, weight: .bold))
-                                    .foregroundColor(.orange)
-                            }
-
-                            HStack(spacing: 8) {
-                                Button("Friendly") { bayesianPresetIndex = 0 }
-                                    .buttonStyle(.borderedProminent)
-                                    .tint(bayesianPresetIndex == 0 ? .orange : .gray)
-
-                                Button("Evil Spikes") { bayesianPresetIndex = 1 }
-                                    .buttonStyle(.borderedProminent)
-                                    .tint(bayesianPresetIndex == 1 ? .red : .gray)
-
-                                Button("Zero Var") { bayesianPresetIndex = 2 }
-                                    .buttonStyle(.borderedProminent)
-                                    .tint(bayesianPresetIndex == 2 ? .blue : .gray)
-                            }
-                            .font(.system(size: 11, weight: .bold))
-
-                            SolarBayesianTrendView(
-                                binding: VizDataBinding(data: currentData, x: \.value, y: \.value),
-                                title: presetTitle
-                            )
-                        }
-                        .padding(16)
+                        EmptyView()
                     }
                 }
                 .padding(.horizontal, 20)
@@ -379,3 +426,16 @@ struct ContentView: View {
         }
     }
 }
+
+#if canImport(UIKit)
+struct SolarUIKitHostingWrapperView: UIViewRepresentable {
+    let binding: VizDataBinding<SolarDefaultDataPoint, String, Double>
+
+    func makeUIView(context: Context) -> SolarVizHostingView<SolarComparisonChartView<SolarDefaultDataPoint, String, Double>> {
+        let chart = SolarComparisonChartView(binding: binding, seriesA: "Revenue ($K)", seriesB: "Expenses ($K)")
+        return SolarVizHostingView(rootView: chart)
+    }
+
+    func updateUIView(_ uiView: SolarVizHostingView<SolarComparisonChartView<SolarDefaultDataPoint, String, Double>>, context: Context) {}
+}
+#endif

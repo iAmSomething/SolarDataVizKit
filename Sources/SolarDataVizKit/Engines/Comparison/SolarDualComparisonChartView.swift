@@ -13,7 +13,12 @@ public struct SolarDualComparisonChartView<
     public let bindingB: VizDataBinding<ItemB, XValue, YValue>
     public let labelA: String
     public let labelB: String
-    private var cachedDictB: [String: ItemB] {
+    @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
+    @State private var selectedIndex: Int?
+    @State private var dictBCache: [String: ItemB] = [:]
+
+    private var activeDictB: [String: ItemB] {
+        if !dictBCache.isEmpty { return dictBCache }
         var dict: [String: ItemB] = [:]
         for item in bindingB.data {
             let key = bindingB.extractX(from: item).description
@@ -21,9 +26,6 @@ public struct SolarDualComparisonChartView<
         }
         return dict
     }
-
-    @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
-    @State private var selectedIndex: Int?
 
     public init(
         bindingA: VizDataBinding<ItemA, XValue, YValue>,
@@ -130,7 +132,7 @@ public struct SolarDualComparisonChartView<
                         let valA = Double(bindingA.extractY(from: itemA))
 
                         // Fast O(1) Dictionary Lookup
-                        let matchingItemB = cachedDictB[xKeyA]
+                        let matchingItemB = activeDictB[xKeyA]
                         let valB = matchingItemB != nil ? Double(bindingB.extractY(from: matchingItemB!)) : valA
 
                         let totalCount = max(bindingA.data.count, 1)
@@ -186,6 +188,14 @@ public struct SolarDualComparisonChartView<
                         }
                 )
             }
+        }
+        .task(id: bindingB.dataHash) {
+            var dict: [String: ItemB] = [:]
+            for item in bindingB.data {
+                let key = bindingB.extractX(from: item).description
+                dict[key] = item
+            }
+            self.dictBCache = dict
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Heterogenous Dual Comparison Line Chart, \(labelA) versus \(labelB)")

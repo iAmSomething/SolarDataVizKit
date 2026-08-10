@@ -49,24 +49,19 @@ public struct SquarifiedTreemapStrategy: TreemapLayoutStrategy {
         var remainingRect = bounds
         var currentRow: [(item: Item, val: Double)] = []
 
-        func worstAspectRatio(row: [(item: Item, val: Double)], sideLength: CGFloat) -> CGFloat {
-            guard !row.isEmpty, sideLength > 0 else { return .greatestFiniteMagnitude }
-            let rowTotal = row.reduce(0.0) { $0 + $1.val }
-            let rowArea = (rowTotal / totalValue) * Double(bounds.width * bounds.height)
-            let length = Double(sideLength)
-            let rowThickness = rowArea / length
-            guard rowThickness > 0 else { return .greatestFiniteMagnitude }
-
-            var maxAspect: CGFloat = 0
-            for elem in row {
-                let elemArea = (elem.val / totalValue) * Double(bounds.width * bounds.height)
-                let elemLength = elemArea / rowThickness
-                let aspect = elemLength >= rowThickness ? (elemLength / rowThickness) : (rowThickness / elemLength)
-                if aspect > maxAspect {
-                    maxAspect = aspect
-                }
-            }
-            return maxAspect
+        func worstAspectRatio(rowSum: Double, rowMax: Double, rowMin: Double, sideLength: CGFloat) -> Double {
+            guard rowSum > 0, sideLength > 0, rowMin > 0 else { return .greatestFiniteMagnitude }
+            let totalArea = Double(bounds.width * bounds.height)
+            let sArea = (rowSum / totalValue) * totalArea
+            let pMaxArea = (rowMax / totalValue) * totalArea
+            let pMinArea = (rowMin / totalValue) * totalArea
+            let w = Double(sideLength)
+            let w2 = w * w
+            let s2 = sArea * sArea
+            guard s2 > 0, w2 > 0 else { return .greatestFiniteMagnitude }
+            let aspect1 = (w2 * pMaxArea) / s2
+            let aspect2 = s2 / (w2 * pMinArea)
+            return max(aspect1, aspect2)
         }
 
         func layoutRow(row: [(item: Item, val: Double)], in rect: inout CGRect) {
@@ -105,21 +100,36 @@ public struct SquarifiedTreemapStrategy: TreemapLayoutStrategy {
             }
         }
 
+        var rowSum = 0.0
+        var rowMax = 0.0
+        var rowMin = Double.greatestFiniteMagnitude
+
         for itemTuple in sorted {
             let sideLength = remainingRect.width >= remainingRect.height ? remainingRect.height : remainingRect.width
             if currentRow.isEmpty {
                 currentRow.append(itemTuple)
+                rowSum = itemTuple.val
+                rowMax = itemTuple.val
+                rowMin = itemTuple.val
             } else {
-                let currentWorst = worstAspectRatio(row: currentRow, sideLength: sideLength)
-                var nextRow = currentRow
-                nextRow.append(itemTuple)
-                let nextWorst = worstAspectRatio(row: nextRow, sideLength: sideLength)
+                let currentWorst = worstAspectRatio(rowSum: rowSum, rowMax: rowMax, rowMin: rowMin, sideLength: sideLength)
+
+                let nextSum = rowSum + itemTuple.val
+                let nextMax = max(rowMax, itemTuple.val)
+                let nextMin = min(rowMin, itemTuple.val)
+                let nextWorst = worstAspectRatio(rowSum: nextSum, rowMax: nextMax, rowMin: nextMin, sideLength: sideLength)
 
                 if nextWorst <= currentWorst {
                     currentRow.append(itemTuple)
+                    rowSum = nextSum
+                    rowMax = nextMax
+                    rowMin = nextMin
                 } else {
                     layoutRow(row: currentRow, in: &remainingRect)
                     currentRow = [itemTuple]
+                    rowSum = itemTuple.val
+                    rowMax = itemTuple.val
+                    rowMin = itemTuple.val
                 }
             }
         }

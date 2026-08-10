@@ -27,28 +27,35 @@ public struct SolarComparisonChartView<
     public let binding: VizDataBinding<Item, XValue, YValue>
     public let seriesA: String
     public let seriesB: String
-    private var itemsA: [Item] {
+    @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
+    @State private var selectedIndex: Int?
+    @State private var previousCrossIndex: Int?
+
+    @State private var cachedItemsA: [Item] = []
+    @State private var cachedItemsB: [Item] = []
+    @State private var cachedDictB: [String: Item] = [:]
+
+    private var activeItemsA: [Item] {
+        if !cachedItemsA.isEmpty { return cachedItemsA }
         let groups = binding.sortedGroupedData()
         return groups.first(where: { $0.key == seriesA })?.items ?? groups.first?.items ?? []
     }
 
-    private var itemsB: [Item] {
+    private var activeItemsB: [Item] {
+        if !cachedItemsB.isEmpty { return cachedItemsB }
         let groups = binding.sortedGroupedData()
         return groups.first(where: { $0.key == seriesB })?.items ?? groups.dropFirst().first?.items ?? []
     }
 
-    private var cachedDictB: [String: Item] {
+    private var activeDictB: [String: Item] {
+        if !cachedDictB.isEmpty { return cachedDictB }
         var dict: [String: Item] = [:]
-        for item in itemsB {
+        for item in activeItemsB {
             let key = binding.extractX(from: item).description
             dict[key] = item
         }
         return dict
     }
-
-    @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
-    @State private var selectedIndex: Int?
-    @State private var previousCrossIndex: Int?
 
     public let initialSelectedIndex: Int?
     public let showIntersectionRegions: Bool
@@ -103,7 +110,7 @@ public struct SolarComparisonChartView<
 
                     Chart {
                         if showIntersectionRegions {
-                            ForEach(itemsA) { item in
+                            ForEach(activeItemsA) { item in
                                 let xVal = binding.extractX(from: item)
                                 let yVal = binding.extractY(from: item)
                                 AreaMark(
@@ -113,7 +120,7 @@ public struct SolarComparisonChartView<
                                 .foregroundStyle(LinearGradient(colors: [colorA.opacity(0.35), colorA.opacity(0.05)], startPoint: .top, endPoint: .bottom))
                             }
 
-                            ForEach(itemsB) { item in
+                            ForEach(activeItemsB) { item in
                                 let xVal = binding.extractX(from: item)
                                 let yVal = binding.extractY(from: item)
                                 AreaMark(
@@ -125,7 +132,7 @@ public struct SolarComparisonChartView<
                         }
 
                         // Draw Series A (Solid Line - Orange)
-                        ForEach(itemsA) { item in
+                        ForEach(activeItemsA) { item in
                             let xVal = binding.extractX(from: item)
                             let yVal = binding.extractY(from: item)
 
@@ -138,7 +145,7 @@ public struct SolarComparisonChartView<
                         }
 
                         // Draw Series B (Dashed Line - Cyan Blue)
-                        ForEach(itemsB) { item in
+                        ForEach(activeItemsB) { item in
                             let xVal = binding.extractX(from: item)
                             let yVal = binding.extractY(from: item)
 
@@ -150,8 +157,8 @@ public struct SolarComparisonChartView<
                             .lineStyle(StrokeStyle(lineWidth: 2.5, dash: [5, 4]))
                         }
 
-                        if let selectedIndex, selectedIndex < itemsA.count {
-                            let itemA = itemsA[selectedIndex]
+                        if let selectedIndex, selectedIndex < activeItemsA.count {
+                            let itemA = activeItemsA[selectedIndex]
                             let xVal = binding.extractX(from: itemA)
 
                             RuleMark(x: .value("Selected", xVal.description))
@@ -183,16 +190,16 @@ public struct SolarComparisonChartView<
                     .padding(8)
 
                     // Key-Based Joined Tooltip Overlay on Touch Selection
-                    if let selectedIndex, selectedIndex < itemsA.count {
-                        let itemA = itemsA[selectedIndex]
+                    if let selectedIndex, selectedIndex < activeItemsA.count {
+                        let itemA = activeItemsA[selectedIndex]
                         let xKeyA = binding.extractX(from: itemA).description
                         let valA = Double(binding.extractY(from: itemA))
 
                         // Fast O(1) Dictionary Lookup
-                        let matchingItemB = cachedDictB[xKeyA]
+                        let matchingItemB = activeDictB[xKeyA]
                         let valB = matchingItemB != nil ? Double(binding.extractY(from: matchingItemB!)) : valA
 
-                        let totalCount = max(itemsA.count, 1)
+                        let totalCount = max(activeItemsA.count, 1)
                         let progress = CGFloat(selectedIndex) / CGFloat(max(totalCount - 1, 1))
                         let targetX = containerWidth * progress
                         let tooltipWidth: CGFloat = 160.0
@@ -230,7 +237,7 @@ public struct SolarComparisonChartView<
                                 return
                             }
 
-                            let totalCount = max(itemsA.count, 1)
+                            let totalCount = max(activeItemsA.count, 1)
                             let ratio = min(max(value.location.x / containerWidth, 0.0), 1.0)
                             let index = min(max(Int(round(ratio * CGFloat(totalCount - 1))), 0), totalCount - 1)
 
@@ -252,23 +259,38 @@ public struct SolarComparisonChartView<
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Comparison Line Chart, \(seriesA) versus \(seriesB)")
-        .accessibilityValue("\(itemsA.count) data points. Touch or drag to inspect delta values.")
+        .accessibilityValue("\(activeItemsA.count) data points. Touch or drag to inspect delta values.")
+        .task(id: binding.dataHash) {
+            let groups = binding.sortedGroupedData()
+            let listA = groups.first(where: { $0.key == seriesA })?.items ?? groups.first?.items ?? []
+            let listB = groups.first(where: { $0.key == seriesB })?.items ?? groups.dropFirst().first?.items ?? []
+
+            var dict: [String: Item] = [:]
+            for item in listB {
+                let key = binding.extractX(from: item).description
+                dict[key] = item
+            }
+
+            self.cachedItemsA = listA
+            self.cachedItemsB = listB
+            self.cachedDictB = dict
+        }
         .onChange(of: initialSelectedIndex) { newValue in
             selectedIndex = newValue
         }
     }
 
     private func checkIntersectionHaptic(at index: Int) {
-        guard index > 0, index < itemsA.count else { return }
-        let currA = itemsA[index]
-        let prevA = itemsA[index - 1]
+        guard index > 0, index < activeItemsA.count else { return }
+        let currA = activeItemsA[index]
+        let prevA = activeItemsA[index - 1]
 
         let keyCurr = binding.extractX(from: currA).description
         let keyPrev = binding.extractX(from: prevA).description
 
         // Key-based join lookup for series B matching exact X-keys preventing out-of-range crashes
-        guard let currB = itemsB.first(where: { binding.extractX(from: $0).description == keyCurr }),
-              let prevB = itemsB.first(where: { binding.extractX(from: $0).description == keyPrev }) else { return }
+        guard let currB = activeItemsB.first(where: { binding.extractX(from: $0).description == keyCurr }),
+              let prevB = activeItemsB.first(where: { binding.extractX(from: $0).description == keyPrev }) else { return }
 
         let prevDiff = Double(binding.extractY(from: prevA)) - Double(binding.extractY(from: prevB))
         let currDiff = Double(binding.extractY(from: currA)) - Double(binding.extractY(from: currB))
