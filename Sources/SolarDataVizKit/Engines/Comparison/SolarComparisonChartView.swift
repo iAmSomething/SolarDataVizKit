@@ -207,7 +207,9 @@ public struct SolarComparisonChartView<
             let newGroups = await Task.detached(priority: .userInitiated) {
                 targetBinding.sortedGroupedData()
             }.value
-            self.sortedGroups = newGroups
+            withAnimation(.easeOut(duration: 0.3)) {
+                self.sortedGroups = newGroups
+            }
         }
     }
 

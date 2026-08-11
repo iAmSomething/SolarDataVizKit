@@ -148,7 +148,9 @@ public struct SolarSunburstView<
             let newArcs = await Task.detached(priority: .userInitiated) {
                 targetBinding.sunburstArcs()
             }.value
-            self.cachedArcs = newArcs
+            withAnimation(.easeOut(duration: 0.3)) {
+                self.cachedArcs = newArcs
+            }
         }
     }
 

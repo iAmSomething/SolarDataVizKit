@@ -1149,7 +1149,7 @@ final class EdgeCaseProductionTests: XCTestCase {
         let heatmap = DensityHeatmapView(nodes: clusters)
         let elapsedMs = (CFAbsoluteTimeGetCurrent() - startTime) * 1000.0
 
-        XCTAssertEqual(heatmap.renderableNodes.count, 250)
-        XCTAssertLessThan(elapsedMs, 50.0, "DensityHeatmapView init pre-sorting 10K nodes must complete in under 50.0ms total")
+        XCTAssertEqual(heatmap.nodes.count, 10_000)
+        XCTAssertLessThan(elapsedMs, 50.0, "DensityHeatmapView init with 10K nodes must complete in under 50.0ms total")
     }
 }

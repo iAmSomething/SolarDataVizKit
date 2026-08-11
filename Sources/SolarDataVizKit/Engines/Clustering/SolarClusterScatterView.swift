@@ -27,6 +27,7 @@ public struct SolarClusterScatterView<
     @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
     @State private var previousClusterCount: Int = 0
     @State private var nodes: [ClusterNode] = []
+    @State private var heatmapNodes: [ClusterNode] = []
 
     public init(
         binding: VizDataBinding<Item, XValue, YValue>,
@@ -43,8 +44,8 @@ public struct SolarClusterScatterView<
             let size = geometry.size
 
             ZStack {
-                // Density Heatmap Layer (Single-pass Canvas rasterization)
-                DensityHeatmapView(nodes: nodes)
+                // Density Heatmap Layer (Single-pass Canvas rasterization with 0 body sorting)
+                DensityHeatmapView(nodes: heatmapNodes)
 
                 // Cluster Nodes Layer
                 ForEach(nodes) { node in
@@ -123,7 +124,7 @@ public struct SolarClusterScatterView<
         let boundsY = binding.yBounds()
 
         // Offload clustering to background thread supporting both Numeric and Categorical (String/Date) XValues
-        let calculated = await Task.detached(priority: .userInitiated) { () -> [ClusterNode] in
+        let (calculatedNodes, sortedHeatmap) = await Task.detached(priority: .userInitiated) { () -> ([ClusterNode], [ClusterNode]) in
             let allNums = localBinding.data.compactMap { Double(String(describing: localBinding.extractX(from: $0))) }
             let minVal = allNums.min() ?? 0.0
             let maxVal = allNums.max() ?? 1.0
@@ -147,10 +148,15 @@ public struct SolarClusterScatterView<
                 let posY = size.height - 30 - CGFloat(normY) * (size.height - 60)
                 return (id: String(describing: item.id), point: CGPoint(x: posX, y: posY), weight: 1.0)
             }
-            return ClusterNodeCalculator.cluster(points: points, thresholdRadius: radius)
+            let resNodes = ClusterNodeCalculator.cluster(points: points, thresholdRadius: radius)
+            let resHeatmap = Array(resNodes.sorted(by: { $0.count > $1.count }).prefix(250))
+            return (resNodes, resHeatmap)
         }.value
 
-        SolarVizLayoutCache.shared.setClusterNodes(calculated, forKey: cacheKey)
-        self.nodes = calculated
+        SolarVizLayoutCache.shared.setClusterNodes(calculatedNodes, forKey: cacheKey)
+        withAnimation(.easeOut(duration: 0.3)) {
+            self.nodes = calculatedNodes
+            self.heatmapNodes = sortedHeatmap
+        }
     }
 }

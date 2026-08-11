@@ -15,7 +15,7 @@ public struct SolarDualComparisonChartView<
     public let labelB: String
     @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
     @State private var selectedIndex: Int?
-    @State private var itemBDict: [String: ItemB] = [:]
+    @State private var lookupDictB: [String: ItemB] = [:]
 
     private func findMatchingItemB(for xKey: String, at index: Int) -> ItemB? {
         let itemsB = bindingB.data
@@ -25,7 +25,7 @@ public struct SolarDualComparisonChartView<
                 return candidate
             }
         }
-        return itemBDict[xKey]
+        return lookupDictB[xKey]
     }
 
     public init(
@@ -204,7 +204,9 @@ public struct SolarDualComparisonChartView<
                 }
                 return map
             }.value
-            self.itemBDict = dict
+            withAnimation(.easeOut(duration: 0.3)) {
+                self.lookupDictB = dict
+            }
         }
     }
 }
