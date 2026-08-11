@@ -17,14 +17,8 @@ public struct SolarDualComparisonChartView<
     @State private var selectedIndex: Int?
     @State private var lookupDictB: [String: ItemB] = [:]
 
-    private func findMatchingItemB(for xKey: String, at index: Int) -> ItemB? {
-        let itemsB = bindingB.data
-        if index < itemsB.count {
-            let candidate = itemsB[index]
-            if bindingB.extractX(from: candidate).description == xKey {
-                return candidate
-            }
-        }
+    private func findMatchingItemB(for xKey: String) -> ItemB? {
+        // True O(1) Dictionary Lookup
         return lookupDictB[xKey]
     }
 
@@ -132,8 +126,8 @@ public struct SolarDualComparisonChartView<
                         let xKeyA = bindingA.extractX(from: itemA).description
                         let valA = Double(bindingA.extractY(from: itemA))
 
-                        // Fast O(1) Zero-Allocation Array Index / Key Lookup
-                        let matchingItemB = findMatchingItemB(for: xKeyA, at: selectedIndex)
+                        // Fast O(1) Dictionary Key Lookup
+                        let matchingItemB = findMatchingItemB(for: xKeyA)
                         let valB = matchingItemB != nil ? Double(bindingB.extractY(from: matchingItemB!)) : valA
 
                         let totalCount = max(bindingA.data.count, 1)
@@ -196,6 +190,7 @@ public struct SolarDualComparisonChartView<
             let targetBindingB = bindingB
             let dict = await Task.detached(priority: .userInitiated) {
                 var map: [String: ItemB] = [:]
+                // Pre-compute O(1) lookup table off the main thread
                 for item in targetBindingB.data {
                     let key = targetBindingB.extractX(from: item).description
                     if map[key] == nil {

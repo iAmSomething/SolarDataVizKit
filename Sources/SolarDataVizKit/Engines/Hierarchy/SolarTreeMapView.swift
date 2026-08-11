@@ -21,6 +21,7 @@ public struct SolarTreeMapView<
 
     @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
     @State private var selectedTileID: String?
+    @State private var tiles: [TreeTile<Item>] = []
 
     public init(
         binding: VizDataBinding<Item, XValue, YValue>,
@@ -36,11 +37,27 @@ public struct SolarTreeMapView<
         let theme = environmentTheme
 
         GeometryReader { geometry in
-            let tiles = computeTiles(bounds: CGRect(origin: .zero, size: geometry.size))
-
             ZStack(alignment: .topLeading) {
                 ForEach(Array(tiles.enumerated()), id: \.element.id) { index, tile in
                     tileView(tile: tile, index: index, theme: theme)
+                }
+            }
+            .task(id: "\(binding.dataHash)_\(geometry.size.width)x\(geometry.size.height)") {
+                let rect = CGRect(origin: .zero, size: geometry.size)
+                let localBinding = binding
+                let localStrategy = strategy
+                
+                let newTiles = await Task.detached(priority: .userInitiated) {
+                    localStrategy.computeTiles(
+                        data: localBinding.data,
+                        extractY: { Double(localBinding.extractY(from: $0)) },
+                        extractID: { String(describing: $0.id) },
+                        bounds: rect
+                    )
+                }.value
+                
+                withAnimation(.easeOut(duration: 0.3)) {
+                    self.tiles = newTiles
                 }
             }
         }
@@ -115,13 +132,5 @@ public struct SolarTreeMapView<
         }
     }
 
-    private func computeTiles(bounds: CGRect) -> [TreeTile<Item>] {
-        let localBinding = binding
-        return strategy.computeTiles(
-            data: binding.data,
-            extractY: { Double(localBinding.extractY(from: $0)) },
-            extractID: { String(describing: $0.id) },
-            bounds: bounds
-        )
-    }
+
 }
