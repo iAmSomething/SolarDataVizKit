@@ -67,42 +67,6 @@ public struct VizDataBinding<
         self.groupKeyPath = group
         self.hierarchyKeyPaths = hierarchy.isEmpty ? (group != nil ? [group!] : []) : hierarchy
 
-        // Fast 64-bit Memoization Key with 100% Sound Data Integrity (COW Base Address + Length + KeyPaths + Samples)
-        var hasher = Hasher()
-        hasher.combine(data.count)
-        data.withUnsafeBufferPointer { buffer in
-            if let base = buffer.baseAddress {
-                hasher.combine(UInt(bitPattern: base))
-            }
-        }
-        hasher.combine(x)
-        hasher.combine(y)
-        if !data.isEmpty {
-            hasher.combine(data[0].id)
-            hasher.combine(Double(data[0][keyPath: y]))
-            hasher.combine(data[data.count - 1].id)
-            hasher.combine(Double(data[data.count - 1][keyPath: y]))
-        }
-        if let group {
-            hasher.combine(group)
-        }
-        let memoKey = hasher.finalize()
-
-        typealias Payload = (
-            groupedData: [String: [Item]],
-            sortedGroupedData: [(key: String, items: [Item])],
-            yBounds: (min: YValue, max: YValue),
-            sunburstArcs: [SunburstArc<Item>]
-        )
-
-        if let cachedPayload: Payload = VizBindingMemoCache.getPayload(for: memoKey) {
-            self.cachedGroupedData = cachedPayload.groupedData
-            self.cachedSortedGroupedData = cachedPayload.sortedGroupedData
-            self.cachedYBounds = cachedPayload.yBounds
-            self.cachedSunburstArcs = cachedPayload.sunburstArcs
-            return
-        }
-
         // 1. Single-Pass O(N) 그룹핑 사전 연산 캐싱
         let computedGroupedData: [String: [Item]]
         let computedSortedGroupedData: [(key: String, items: [Item])]
@@ -163,9 +127,6 @@ public struct VizDataBinding<
         self.cachedSortedGroupedData = computedSortedGroupedData
         self.cachedYBounds = computedYBounds
         self.cachedSunburstArcs = computedSunburstArcs
-
-        let payload: Payload = (computedGroupedData, computedSortedGroupedData, computedYBounds, computedSunburstArcs)
-        VizBindingMemoCache.setPayload(payload, for: memoKey)
     }
 
     /// 데이터 배열의 개수, 첫/끝/중간 요소 식별자 및 Y수치를 포함한 빠른 64-bit 데이터 해시값을 반환합니다.
@@ -410,42 +371,4 @@ public struct HierarchyNode<Item: Sendable>: Identifiable, Sendable {
     }
 
     public var isLeaf: Bool { children.isEmpty }
-}
-
-/// `VizBindingMemoCache`는 SwiftUI `body` 내부에서 인라인으로 `VizDataBinding` 구조체를 반복 생성할 때
-/// 메인 스레드 연산 오버헤드를 0.00ms로 소멸시키는 스레드 세이프 LRU 메모이전 캐시 관리자입니다.
-internal struct VizBindingMemoCache {
-    nonisolated(unsafe) private static var lock = os_unfair_lock_s()
-    nonisolated(unsafe) private static var storage: [Int: Any] = [:]
-    nonisolated(unsafe) private static var order: [Int] = []
-    private static let maxCapacity = 128
-
-    static func getPayload<T>(for key: Int) -> T? {
-        os_unfair_lock_lock(&lock)
-        defer { os_unfair_lock_unlock(&lock) }
-        guard let payload = storage[key] as? T else { return nil }
-        if let idx = order.firstIndex(of: key) {
-            order.remove(at: idx)
-            order.append(key)
-        }
-        return payload
-    }
-
-    static func setPayload<T>(_ payload: T, for key: Int) {
-        os_unfair_lock_lock(&lock)
-        defer { os_unfair_lock_unlock(&lock) }
-
-        if storage[key] == nil {
-            if storage.count >= maxCapacity, !order.isEmpty {
-                let oldestKey = order.removeFirst()
-                storage.removeValue(forKey: oldestKey)
-            }
-            order.append(key)
-        } else if let idx = order.firstIndex(of: key) {
-            order.remove(at: idx)
-            order.append(key)
-        }
-
-        storage[key] = payload
-    }
 }
