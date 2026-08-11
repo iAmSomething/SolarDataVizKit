@@ -7,13 +7,45 @@ public struct SunburstArc<Item: Identifiable & Sendable>: Identifiable, Sendable
     public let item: Item
     public let startAngle: Angle
     public let endAngle: Angle
-    public let innerRadius: CGFloat
-    public let outerRadius: CGFloat
+    public let innerRadiusRatio: CGFloat
+    public let outerRadiusRatio: CGFloat
     public let label: String
     public let percentage: Double
     public let groupIndex: Int
     public let isChild: Bool
     public let childIndex: Int
+
+    public var innerRadius: CGFloat { innerRadiusRatio * 150.0 }
+    public var outerRadius: CGFloat { outerRadiusRatio * 150.0 }
+
+    public func innerRadius(maxRadius: CGFloat) -> CGFloat { innerRadiusRatio * maxRadius }
+    public func outerRadius(maxRadius: CGFloat) -> CGFloat { outerRadiusRatio * maxRadius }
+
+    public init(
+        id: String = UUID().uuidString,
+        item: Item,
+        startAngle: Angle,
+        endAngle: Angle,
+        innerRadiusRatio: CGFloat,
+        outerRadiusRatio: CGFloat,
+        label: String,
+        percentage: Double,
+        groupIndex: Int = 0,
+        isChild: Bool = false,
+        childIndex: Int = 0
+    ) {
+        self.id = id
+        self.item = item
+        self.startAngle = startAngle
+        self.endAngle = endAngle
+        self.innerRadiusRatio = innerRadiusRatio
+        self.outerRadiusRatio = outerRadiusRatio
+        self.label = label
+        self.percentage = percentage
+        self.groupIndex = groupIndex
+        self.isChild = isChild
+        self.childIndex = childIndex
+    }
 
     public init(
         id: String = UUID().uuidString,
@@ -28,32 +60,25 @@ public struct SunburstArc<Item: Identifiable & Sendable>: Identifiable, Sendable
         isChild: Bool = false,
         childIndex: Int = 0
     ) {
-        self.id = id
-        self.item = item
-        self.startAngle = startAngle
-        self.endAngle = endAngle
-        self.innerRadius = innerRadius
-        self.outerRadius = outerRadius
-        self.label = label
-        self.percentage = percentage
-        self.groupIndex = groupIndex
-        self.isChild = isChild
-        self.childIndex = childIndex
+        let baseMax: CGFloat = max(outerRadius, 1.0)
+        self.init(
+            id: id,
+            item: item,
+            startAngle: startAngle,
+            endAngle: endAngle,
+            innerRadiusRatio: innerRadius / baseMax,
+            outerRadiusRatio: outerRadius / baseMax,
+            label: label,
+            percentage: percentage,
+            groupIndex: groupIndex,
+            isChild: isChild,
+            childIndex: childIndex
+        )
     }
 }
 
 /// ## Quick View
 /// `SolarSunburstView`는 1차 대분류 및 2차 소분류 계층 구조를 동심원 부채꼴 링으로 확장하여 시각화하는 뷰 컴포넌트입니다.
-///
-/// - **특징**:
-///   - **Concentric Ring Donut**: 계층형 세그먼트를 부채꼴 링 형태로 아크 드로잉.
-///   - **Interactive Arc Selection**: 부채꼴 아치 선택 시 오버레이 강조 및 햅틱 피드백 트리거.
-///
-/// ## 사용 예시
-/// ```swift
-/// SolarSunburstView(binding: mySunburstBinding)
-///     .solarVizTheme(.darkCarbon)
-/// ```
 public struct SolarSunburstView<
     Item: Identifiable & Sendable,
     XValue: Hashable & Sendable & CustomStringConvertible,
@@ -63,7 +88,6 @@ public struct SolarSunburstView<
 
     @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
     @State private var selectedArcID: String?
-    @State private var cachedArcs: [SunburstArc<Item>] = []
 
     public init(
         binding: VizDataBinding<Item, XValue, YValue>,
@@ -79,11 +103,11 @@ public struct SolarSunburstView<
         GeometryReader { geometry in
             let center = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
             let maxRadius = min(geometry.size.width, geometry.size.height) / 2
-            let arcs = cachedArcs.isEmpty ? computeArcs(center: center, maxRadius: maxRadius) : cachedArcs
+            let arcs = computeArcs()
 
             ZStack {
                 ForEach(arcs) { arc in
-                    arcView(arc: arc, center: center, theme: theme)
+                    arcView(arc: arc, center: center, maxRadius: maxRadius, theme: theme)
                 }
 
                 // Center Label
@@ -106,12 +130,6 @@ public struct SolarSunburstView<
                 }
             }
         }
-        .task(id: binding.dataHash) {
-            // Pre-calculate arcs once off main thread / on task sync to prevent 60fps GeometryReader grouping bottlenecks
-            let dummyCenter = CGPoint(x: 150, y: 150)
-            let dummyRadius: CGFloat = 150
-            self.cachedArcs = computeArcs(center: dummyCenter, maxRadius: dummyRadius)
-        }
         .background(
             RoundedRectangle(cornerRadius: environmentTheme.cornerRadius)
                 .fill(environmentTheme.backgroundColor)
@@ -126,23 +144,26 @@ public struct SolarSunburstView<
     }
 
     @ViewBuilder
-    private func arcView(arc: SunburstArc<Item>, center: CGPoint, theme: SolarVizTheme) -> some View {
+    private func arcView(arc: SunburstArc<Item>, center: CGPoint, maxRadius: CGFloat, theme: SolarVizTheme) -> some View {
         let isSelected = selectedArcID == arc.id
         let baseColor = !theme.seriesColors.isEmpty ? theme.seriesColors[arc.groupIndex % theme.seriesColors.count] : theme.accentColor
         let color = arc.isChild ? baseColor.opacity(0.60 + 0.12 * Double(arc.childIndex % 3)) : baseColor
+
+        let innerR = arc.innerRadius(maxRadius: maxRadius)
+        let outerR = arc.outerRadius(maxRadius: maxRadius)
 
         ZStack {
             Path { path in
                 path.addArc(
                     center: center,
-                    radius: arc.outerRadius,
+                    radius: outerR,
                     startAngle: arc.startAngle,
                     endAngle: arc.endAngle,
                     clockwise: false
                 )
                 path.addArc(
                     center: center,
-                    radius: arc.innerRadius,
+                    radius: innerR,
                     startAngle: arc.endAngle,
                     endAngle: arc.startAngle,
                     clockwise: true
@@ -154,11 +175,11 @@ public struct SolarSunburstView<
                 Path { path in
                     let sweepDeg = abs(arc.endAngle.degrees - arc.startAngle.degrees)
                     if sweepDeg >= 359.9 {
-                        path.addArc(center: center, radius: arc.outerRadius, startAngle: .degrees(0), endAngle: .degrees(360), clockwise: false)
-                        path.addArc(center: center, radius: arc.innerRadius, startAngle: .degrees(360), endAngle: .degrees(0), clockwise: true)
+                        path.addArc(center: center, radius: outerR, startAngle: .degrees(0), endAngle: .degrees(360), clockwise: false)
+                        path.addArc(center: center, radius: innerR, startAngle: .degrees(360), endAngle: .degrees(0), clockwise: true)
                     } else {
-                        path.addArc(center: center, radius: arc.outerRadius, startAngle: arc.startAngle, endAngle: arc.endAngle, clockwise: false)
-                        path.addArc(center: center, radius: arc.innerRadius, startAngle: arc.endAngle, endAngle: arc.startAngle, clockwise: true)
+                        path.addArc(center: center, radius: outerR, startAngle: arc.startAngle, endAngle: arc.endAngle, clockwise: false)
+                        path.addArc(center: center, radius: innerR, startAngle: arc.endAngle, endAngle: arc.startAngle, clockwise: true)
                         path.closeSubpath()
                     }
                 }
@@ -180,20 +201,20 @@ public struct SolarSunburstView<
         }
     }
 
-    /// 2-Level Hierarchical Sunburst Ring Algorithm (Parent Group Ring + Child Sub-item Ring)
-    private func computeArcs(center: CGPoint, maxRadius: CGFloat) -> [SunburstArc<Item>] {
-        guard !binding.data.isEmpty, maxRadius > 0 else { return [] }
+    /// 2-Level Hierarchical Sunburst Ring Algorithm (Responsive Normalized Ratios)
+    private func computeArcs() -> [SunburstArc<Item>] {
+        guard !binding.data.isEmpty else { return [] }
         let totalValue = binding.data.reduce(0.0) { $0 + max(0.0, Double(binding.extractY(from: $1))) }
         guard totalValue > 0 else { return [] }
 
         var arcs: [SunburstArc<Item>] = []
         var currentAngle: Double = -90.0 // Start at 12 o'clock
 
-        let innerRingR0 = maxRadius * 0.30
-        let innerRingR1 = maxRadius * 0.58
+        let innerRingR0Ratio: CGFloat = 0.30
+        let innerRingR1Ratio: CGFloat = 0.58
 
-        let outerRingR0 = maxRadius * 0.62
-        let outerRingR1 = maxRadius * 0.90
+        let outerRingR0Ratio: CGFloat = 0.62
+        let outerRingR1Ratio: CGFloat = 0.90
 
         let sortedGroupedData = binding.sortedGroupedData()
 
@@ -215,8 +236,8 @@ public struct SolarSunburstView<
                     item: firstItem,
                     startAngle: Angle(degrees: groupStartAngle),
                     endAngle: Angle(degrees: groupEndAngle),
-                    innerRadius: innerRingR0,
-                    outerRadius: innerRingR1,
+                    innerRadiusRatio: innerRingR0Ratio,
+                    outerRadiusRatio: innerRingR1Ratio,
                     label: groupName,
                     percentage: groupPct,
                     groupIndex: groupIndex,
@@ -242,8 +263,8 @@ public struct SolarSunburstView<
                     item: item,
                     startAngle: itemStartA,
                     endAngle: itemEndA,
-                    innerRadius: outerRingR0,
-                    outerRadius: outerRingR1,
+                    innerRadiusRatio: outerRingR0Ratio,
+                    outerRadiusRatio: outerRingR1Ratio,
                     label: itemLabel,
                     percentage: itemPct,
                     groupIndex: groupIndex,

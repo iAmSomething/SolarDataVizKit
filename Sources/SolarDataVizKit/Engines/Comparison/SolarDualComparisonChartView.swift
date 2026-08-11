@@ -15,10 +15,8 @@ public struct SolarDualComparisonChartView<
     public let labelB: String
     @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
     @State private var selectedIndex: Int?
-    @State private var dictBCache: [String: ItemB] = [:]
 
     private var activeDictB: [String: ItemB] {
-        if !dictBCache.isEmpty { return dictBCache }
         var dict: [String: ItemB] = [:]
         for item in bindingB.data {
             let key = bindingB.extractX(from: item).description
@@ -188,14 +186,6 @@ public struct SolarDualComparisonChartView<
                         }
                 )
             }
-        }
-        .task(id: bindingB.dataHash) {
-            var dict: [String: ItemB] = [:]
-            for item in bindingB.data {
-                let key = bindingB.extractX(from: item).description
-                dict[key] = item
-            }
-            self.dictBCache = dict
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Heterogenous Dual Comparison Line Chart, \(labelA) versus \(labelB)")

@@ -944,4 +944,47 @@ final class EdgeCaseProductionTests: XCTestCase {
 
         XCTAssertEqual(binding.sortedGroupKeys, ["CatA", "CatB"])
     }
+
+    // MARK: - 50. Phase 15: VizDataBinding O(1) Precomputed Cache Instant Lookup Test
+
+    func testVizDataBindingO1PrecomputedCacheInstantLookup() {
+        let items = (0..<50_000).map { i in
+            ProductionEdgeItem(id: "\(i)", xLabel: "Label_\(i)", yValue: Double(i), category: "Group_\(i % 10)", subCategory: "Sub_\(i % 20)")
+        }
+
+        let binding = VizDataBinding(data: items, x: \.xLabel, y: \.yValue, group: \.category)
+
+        let start = CFAbsoluteTimeGetCurrent()
+        // Accessing sortedGroupedData 10 times in body render
+        for _ in 0..<10 {
+            _ = binding.sortedGroupedData()
+        }
+        let elapsedMs = (CFAbsoluteTimeGetCurrent() - start) * 1000.0
+
+        XCTAssertLessThan(elapsedMs, 1.0, "10 calls to pre-computed sortedGroupedData must take less than 1.0ms total")
+    }
+
+    // MARK: - 51. Phase 15: Responsive Sunburst Arc Radius Scaling iPad Test
+
+    func testResponsiveSunburstArcRadiusScalingIPad() {
+        let arc = SunburstArc(
+            id: "test_arc",
+            item: ProductionEdgeItem(id: "1", xLabel: "A", yValue: 100.0, category: "CatA", subCategory: "SubA"),
+            startAngle: .degrees(0),
+            endAngle: .degrees(180),
+            innerRadiusRatio: 0.30,
+            outerRadiusRatio: 0.58,
+            label: "Test",
+            percentage: 50.0
+        )
+
+        let smallRadius: CGFloat = 100.0
+        let ipadRadius: CGFloat = 1000.0
+
+        XCTAssertEqual(arc.innerRadius(maxRadius: smallRadius), 30.0, accuracy: 0.001)
+        XCTAssertEqual(arc.outerRadius(maxRadius: smallRadius), 58.0, accuracy: 0.001)
+
+        XCTAssertEqual(arc.innerRadius(maxRadius: ipadRadius), 300.0, accuracy: 0.001)
+        XCTAssertEqual(arc.outerRadius(maxRadius: ipadRadius), 580.0, accuracy: 0.001)
+    }
 }

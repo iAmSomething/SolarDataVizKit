@@ -36,6 +36,13 @@ public struct VizDataBinding<
     /// 다단계 계층구조 식별용 KeyPath 배열입니다 (선택사항).
     public let hierarchyKeyPaths: [KeyPath<Item, String>]
 
+    /// 사전 연산된 그룹별 데이터 딕셔너리 캐시입니다.
+    private let cachedGroupedData: [String: [Item]]
+    /// 사전 연산된 순서 보장 그룹별 데이터 배열 캐시입니다.
+    private let cachedSortedGroupedData: [(key: String, items: [Item])]
+    /// 사전 연산된 Y축 최소/최대 범위 캐시입니다.
+    private let cachedYBounds: (min: YValue, max: YValue)
+
     /// KeyPath 바인딩 래퍼를 초기화합니다.
     ///
     /// - Parameters:
@@ -56,6 +63,49 @@ public struct VizDataBinding<
         self.yKeyPath = y
         self.groupKeyPath = group
         self.hierarchyKeyPaths = hierarchy.isEmpty ? (group != nil ? [group!] : []) : hierarchy
+
+        // 1. 단 한 번만 실행되는 Single-Pass O(N) 그룹핑 사전 연산 캐싱
+        if let group {
+            var dict: [String: [Item]] = [:]
+            var keys: [String] = []
+            for item in data {
+                let key = item[keyPath: group]
+                if dict[key] == nil {
+                    keys.append(key)
+                }
+                dict[key, default: []].append(item)
+            }
+            self.cachedGroupedData = dict
+            self.cachedSortedGroupedData = keys.compactMap { key in
+                guard let items = dict[key] else { return nil }
+                return (key: key, items: items)
+            }
+        } else {
+            self.cachedGroupedData = ["Default": data]
+            self.cachedSortedGroupedData = [("Default", data)]
+        }
+
+        // 2. Y축 최소/최대 범위 사전 연산 캐싱
+        let validItems = data.filter {
+            let doubleVal = Double($0[keyPath: y])
+            return !doubleVal.isNaN && !doubleVal.isInfinite
+        }
+        if let first = validItems.first {
+            var minY = first[keyPath: y]
+            var maxY = minY
+            for item in validItems {
+                let val = item[keyPath: y]
+                if val < minY { minY = val }
+                if val > maxY { maxY = val }
+            }
+            if minY == maxY {
+                minY = minY == 0 ? 0 : minY * 0.9
+                maxY = maxY == 0 ? 1 : maxY * 1.1
+            }
+            self.cachedYBounds = (minY, maxY)
+        } else {
+            self.cachedYBounds = (0, 1)
+        }
     }
 
     /// 데이터 배열의 개수, 첫/끝/중간 요소 식별자 및 Y수치를 포함한 빠른 64-bit 데이터 해시값을 반환합니다.
@@ -75,27 +125,18 @@ public struct VizDataBinding<
     }
 
     /// 특정 데이터 항목에서 X축 값을 추출합니다.
-    ///
-    /// - Parameter item: 대상 데이터 포인트
-    /// - Returns: 키패스로 바인딩된 X축 값
     @inlinable
     public func extractX(from item: Item) -> XValue {
         item[keyPath: xKeyPath]
     }
 
     /// 특정 데이터 항목에서 Y축 수치를 추출합니다.
-    ///
-    /// - Parameter item: 대상 데이터 포인트
-    /// - Returns: 키패스로 바인딩된 Y축 수치
     @inlinable
     public func extractY(from item: Item) -> YValue {
         item[keyPath: yKeyPath]
     }
 
     /// 특정 데이터 항목에서 속한 그룹 이름을 추출합니다.
-    ///
-    /// - Parameter item: 대상 데이터 포인트
-    /// - Returns: 속한 그룹 이름 (그룹 키패드가 없을 경우 "Default")
     @inlinable
     public func extractGroup(from item: Item) -> String {
         guard let groupKeyPath else { return "Default" }
@@ -104,80 +145,22 @@ public struct VizDataBinding<
 
     /// 전체 그룹 키를 최초 삽입 순서대로 보장하여 반환합니다 (Flickering 방지).
     public var sortedGroupKeys: [String] {
-        guard groupKeyPath != nil else { return ["Default"] }
-        var seen = Set<String>()
-        var keys: [String] = []
-        for item in data {
-            let key = extractGroup(from: item)
-            if seen.insert(key).inserted {
-                keys.append(key)
-            }
-        }
-        return keys
+        cachedSortedGroupedData.map(\.key)
     }
 
-    /// 전체 데이터를 속한 그룹/시리즈별로 분류하여 반환합니다.
-    ///
-    /// - Returns: 그룹 이름을 키로 하는 딕셔너리
+    /// O(1) 상전 연산 캐시를 통한 즉각적 그룹별 데이터 딕셔너리를 반환합니다.
     public func groupedData() -> [String: [Item]] {
-        guard let groupKeyPath else {
-            return ["Default": data]
-        }
-        var dict: [String: [Item]] = [:]
-        for item in data {
-            let key = item[keyPath: groupKeyPath]
-            dict[key, default: []].append(item)
-        }
-        return dict
+        cachedGroupedData
     }
 
-    /// 단 한 번의 루프(Single-Pass O(N))로 결정론적 순서의 그룹별 데이터 배열을 구합니다.
+    /// O(1) 사전 연산 캐시를 통한 즉각적 그룹별 데이터 배열을 반환합니다.
     public func sortedGroupedData() -> [(key: String, items: [Item])] {
-        guard let groupKeyPath else {
-            return [("Default", data)]
-        }
-
-        var dict: [String: [Item]] = [:]
-        var keys: [String] = []
-
-        for item in data {
-            let key = item[keyPath: groupKeyPath]
-            if dict[key] == nil {
-                keys.append(key)
-            }
-            dict[key, default: []].append(item)
-        }
-
-        return keys.compactMap { key in
-            guard let items = dict[key] else { return nil }
-            return (key: key, items: items)
-        }
+        cachedSortedGroupedData
     }
 
-    /// 전체 데이터에서 Y축 수치의 최솟값과 최댓값을 구합니다.
-    ///
-    /// - Returns: (min, max) 튜플
+    /// O(1) 사전 연산 캐시를 통한 즉각적 Y축 수치의 최솟값과 최댓값을 반환합니다.
     public func yBounds() -> (min: YValue, max: YValue) {
-        let validItems = data.filter {
-            let doubleVal = Double($0[keyPath: yKeyPath])
-            return !doubleVal.isNaN && !doubleVal.isInfinite
-        }
-        guard let first = validItems.first else { return (0, 1) }
-
-        var minY = first[keyPath: yKeyPath]
-        var maxY = minY
-
-        for item in validItems {
-            let val = item[keyPath: yKeyPath]
-            if val < minY { minY = val }
-            if val > maxY { maxY = val }
-        }
-
-        if minY == maxY {
-            minY = minY == 0 ? 0 : minY * 0.9
-            maxY = maxY == 0 ? 1 : maxY * 1.1
-        }
-        return (minY, maxY)
+        cachedYBounds
     }
 
     /// 지정된 Y 값을 [0.0, 1.0] 범위의 정규화 수치로 변환합니다.

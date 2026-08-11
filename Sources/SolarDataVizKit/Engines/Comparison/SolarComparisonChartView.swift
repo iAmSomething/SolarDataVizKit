@@ -31,24 +31,17 @@ public struct SolarComparisonChartView<
     @State private var selectedIndex: Int?
     @State private var previousCrossIndex: Int?
 
-    @State private var cachedItemsA: [Item] = []
-    @State private var cachedItemsB: [Item] = []
-    @State private var cachedDictB: [String: Item] = [:]
-
     private var activeItemsA: [Item] {
-        if !cachedItemsA.isEmpty { return cachedItemsA }
         let groups = binding.sortedGroupedData()
         return groups.first(where: { $0.key == seriesA })?.items ?? groups.first?.items ?? []
     }
 
     private var activeItemsB: [Item] {
-        if !cachedItemsB.isEmpty { return cachedItemsB }
         let groups = binding.sortedGroupedData()
         return groups.first(where: { $0.key == seriesB })?.items ?? groups.dropFirst().first?.items ?? []
     }
 
     private var activeDictB: [String: Item] {
-        if !cachedDictB.isEmpty { return cachedDictB }
         var dict: [String: Item] = [:]
         for item in activeItemsB {
             let key = binding.extractX(from: item).description
@@ -107,61 +100,16 @@ public struct SolarComparisonChartView<
                 ZStack(alignment: .topLeading) {
                     let colorA = theme.seriesColors.first ?? theme.accentColor
                     let colorB = theme.seriesColors.dropFirst().first ?? Color(red: 56/255, green: 189/255, blue: 248/255)
+                    let itemsA = activeItemsA
+                    let itemsB = activeItemsB
 
                     Chart {
-                        if showIntersectionRegions {
-                            ForEach(activeItemsA) { item in
-                                let xVal = binding.extractX(from: item)
-                                let yVal = binding.extractY(from: item)
-                                AreaMark(
-                                    x: .value("X", xVal.description),
-                                    y: .value("Y", Double(yVal))
-                                )
-                                .foregroundStyle(LinearGradient(colors: [colorA.opacity(0.35), colorA.opacity(0.05)], startPoint: .top, endPoint: .bottom))
-                            }
+                        seriesMarks(items: itemsA, seriesName: seriesA, isDashed: false)
+                        seriesMarks(items: itemsB, seriesName: seriesB, isDashed: true)
 
-                            ForEach(activeItemsB) { item in
-                                let xVal = binding.extractX(from: item)
-                                let yVal = binding.extractY(from: item)
-                                AreaMark(
-                                    x: .value("X", xVal.description),
-                                    y: .value("Y", Double(yVal))
-                                )
-                                .foregroundStyle(LinearGradient(colors: [colorB.opacity(0.25), colorB.opacity(0.02)], startPoint: .top, endPoint: .bottom))
-                            }
-                        }
-
-                        // Draw Series A (Solid Line - Orange)
-                        ForEach(activeItemsA) { item in
-                            let xVal = binding.extractX(from: item)
-                            let yVal = binding.extractY(from: item)
-
-                            LineMark(
-                                x: .value("X", xVal.description),
-                                y: .value("Y", Double(yVal))
-                            )
-                            .foregroundStyle(by: .value("Series", seriesA))
-                            .lineStyle(StrokeStyle(lineWidth: 3))
-                        }
-
-                        // Draw Series B (Dashed Line - Cyan Blue)
-                        ForEach(activeItemsB) { item in
-                            let xVal = binding.extractX(from: item)
-                            let yVal = binding.extractY(from: item)
-
-                            LineMark(
-                                x: .value("X", xVal.description),
-                                y: .value("Y", Double(yVal))
-                            )
-                            .foregroundStyle(by: .value("Series", seriesB))
-                            .lineStyle(StrokeStyle(lineWidth: 2.5, dash: [5, 4]))
-                        }
-
-                        if let selectedIndex, selectedIndex < activeItemsA.count {
-                            let itemA = activeItemsA[selectedIndex]
-                            let xVal = binding.extractX(from: itemA)
-
-                            RuleMark(x: .value("Selected", xVal.description))
+                        if let selectedIndex, selectedIndex < itemsA.count {
+                            let itemA = itemsA[selectedIndex]
+                            RuleMark(x: .value("Selected", binding.extractX(from: itemA).description))
                                 .foregroundStyle(theme.secondaryTextColor.opacity(0.5))
                                 .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
                         }
@@ -260,21 +208,6 @@ public struct SolarComparisonChartView<
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Comparison Line Chart, \(seriesA) versus \(seriesB)")
         .accessibilityValue("\(activeItemsA.count) data points. Touch or drag to inspect delta values.")
-        .task(id: binding.dataHash) {
-            let groups = binding.sortedGroupedData()
-            let listA = groups.first(where: { $0.key == seriesA })?.items ?? groups.first?.items ?? []
-            let listB = groups.first(where: { $0.key == seriesB })?.items ?? groups.dropFirst().first?.items ?? []
-
-            var dict: [String: Item] = [:]
-            for item in listB {
-                let key = binding.extractX(from: item).description
-                dict[key] = item
-            }
-
-            self.cachedItemsA = listA
-            self.cachedItemsB = listB
-            self.cachedDictB = dict
-        }
         .onChange(of: initialSelectedIndex) { newValue in
             selectedIndex = newValue
         }
@@ -303,6 +236,20 @@ public struct SolarComparisonChartView<
                     SolarVizHaptics.shared.playImpact(style: .medium)
                 }
             }
+        }
+    }
+
+    @ChartContentBuilder
+    private func seriesMarks(items: [Item], seriesName: String, isDashed: Bool) -> some ChartContent {
+        ForEach(items) { item in
+            let xStr = binding.extractX(from: item).description
+            let yVal = Double(binding.extractY(from: item))
+            LineMark(
+                x: .value("X", xStr),
+                y: .value("Y", yVal)
+            )
+            .foregroundStyle(by: .value("Series", seriesName))
+            .lineStyle(StrokeStyle(lineWidth: isDashed ? 2 : 3, dash: isDashed ? [4, 4] : []))
         }
     }
 }
