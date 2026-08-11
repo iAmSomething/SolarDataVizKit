@@ -212,3 +212,25 @@ public struct SolarSunburstView<
         }
     }
 }
+
+#if canImport(SwiftUI)
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *)
+public struct SolarSunburstNativeLayout: Layout {
+    public init() {}
+
+    public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        CGSize(width: proposal.width ?? 300, height: proposal.height ?? 300)
+    }
+
+    public func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
+        for subview in subviews {
+            subview.place(
+                at: center,
+                anchor: .center,
+                proposal: ProposedViewSize(width: bounds.width, height: bounds.height)
+            )
+        }
+    }
+}
+#endif
