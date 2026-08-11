@@ -1,5 +1,35 @@
 import Foundation
 import CoreGraphics
+#if canImport(SwiftUI)
+import SwiftUI
+#endif
+
+#if canImport(SwiftUI)
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *)
+public struct SolarTreemapNativeLayout: Layout {
+    public var tileRects: [CGRect]
+
+    public init(tileRects: [CGRect]) {
+        self.tileRects = tileRects
+    }
+
+    public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        CGSize(width: proposal.width ?? 300, height: proposal.height ?? 300)
+    }
+
+    public func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        for (index, subview) in subviews.enumerated() {
+            if index < tileRects.count {
+                let rect = tileRects[index]
+                subview.place(
+                    at: CGPoint(x: bounds.minX + rect.minX, y: bounds.minY + rect.minY),
+                    proposal: ProposedViewSize(width: rect.width, height: rect.height)
+                )
+            }
+        }
+    }
+}
+#endif
 
 /// 트리맵의 개별 타일 사각형 영역 및 비율 정보 구조체입니다.
 public struct TreeTile<Item: Sendable>: Identifiable, Sendable {

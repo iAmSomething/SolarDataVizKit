@@ -116,18 +116,14 @@ final class EdgeCaseProductionTests: XCTestCase {
     // MARK: - 6. Concurrent Multithreaded Access to Cache & Binding
 
     func testConcurrentCacheAccessSafety() async {
-        @MainActor func accessCache() {
-            let cache = SolarVizLayoutCache.shared
-            cache.clearAll()
+        let cache = SolarVizLayoutCache.shared
+        await cache.clearAll()
 
-            let nodes = [ClusterNode(center: CGPoint(x: 10, y: 10), radius: 5, childIDs: ["1"], count: 1)]
-            for i in 0..<200 {
-                cache.setClusterNodes(nodes, forKey: "key_\(i)")
-                let _ = cache.getClusterNodes(forKey: "key_\(i)")
-            }
+        let nodes = [ClusterNode(center: CGPoint(x: 10, y: 10), radius: 5, childIDs: ["1"], count: 1)]
+        for i in 0..<200 {
+            await cache.setClusterNodes(nodes, forKey: "key_\(i)")
+            let _ = await cache.getClusterNodes(forKey: "key_\(i)")
         }
-
-        await accessCache()
     }
 
     // MARK: - 7. Co-linear Overlapping Line Segments

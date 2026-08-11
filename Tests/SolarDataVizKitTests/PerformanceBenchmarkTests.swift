@@ -99,24 +99,23 @@ final class PerformanceBenchmarkTests: XCTestCase {
 
     // MARK: - 4. Layout Cache Hit Benchmark (10,000 Queries)
 
-    @MainActor
-    func testLayoutCacheHitPerformance() {
+    func testLayoutCacheHitPerformance() async {
         let cache = SolarVizLayoutCache.shared
-        cache.clearAll()
+        await cache.clearAll()
 
         let nodes = (0..<1000).map { i in
             ClusterNode(center: CGPoint(x: i, y: i), radius: 20, childIDs: ["\(i)"], count: 1)
         }
         let key = "benchmark_key_1000"
-        cache.setClusterNodes(nodes, forKey: key)
+        await cache.setClusterNodes(nodes, forKey: key)
 
         let start = CFAbsoluteTimeGetCurrent()
         for _ in 0..<10_000 {
-            let _ = cache.getClusterNodes(forKey: key)
+            let _ = await cache.getClusterNodes(forKey: key)
         }
         let elapsedMS = (CFAbsoluteTimeGetCurrent() - start) * 1000.0
 
         print("⚡ [Benchmark 10,000 Cache Hits] 10,000 lookups completed in \(String(format: "%.2f", elapsedMS)) ms")
-        XCTAssertLessThan(elapsedMS, 50.0)
+        XCTAssertLessThan(elapsedMS, 50.0, "10,000 layout cache lookups must take less than 50.0ms total")
     }
 }

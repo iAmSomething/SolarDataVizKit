@@ -114,7 +114,7 @@ public struct SolarClusterScatterView<
         guard size.width > 0, size.height > 0 else { return }
 
         let cacheKey = "cluster_\(binding.dataHash)_\(clusterRadiusThreshold)_\(Int(size.width))x\(Int(size.height))"
-        if let cached = SolarVizLayoutCache.shared.getClusterNodes(forKey: cacheKey) {
+        if let cached = await SolarVizLayoutCache.shared.getClusterNodes(forKey: cacheKey) {
             self.nodes = cached
             return
         }
@@ -153,7 +153,7 @@ public struct SolarClusterScatterView<
             return (resNodes, resHeatmap)
         }.value
 
-        SolarVizLayoutCache.shared.setClusterNodes(calculatedNodes, forKey: cacheKey)
+        await SolarVizLayoutCache.shared.setClusterNodes(calculatedNodes, forKey: cacheKey)
         withAnimation(.easeOut(duration: 0.3)) {
             self.nodes = calculatedNodes
             self.heatmapNodes = sortedHeatmap

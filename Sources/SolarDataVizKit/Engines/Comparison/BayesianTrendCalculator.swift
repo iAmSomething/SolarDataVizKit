@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import Accelerate
 
 /// 베이지안 수치해석 추이 및 오차 범위(불확실성 구간) 정보를 저장하는 구조체입니다. (Swift 6 Strict Concurrency Sendable 준수)
 public struct BayesianTrendPoint: Sendable, Identifiable, Hashable {
@@ -33,15 +34,9 @@ public struct BayesianTrendPoint: Sendable, Identifiable, Hashable {
     }
 }
 
-/// 가우시안 프로세스(Gaussian Process RBF Kernel) 기반 비선형 베이지안 수치해석 수학 엔진입니다.
+/// 가우시안 프로세스(Gaussian Process RBF Kernel) 기반 비선형 베이지안 수치해석 수학 엔진입니다. (vDSP SIMD Hardware Accelerated)
 public struct BayesianTrendCalculator: Sendable {
     /// 입력 관측 포인트를 바탕으로 비선형 곡선 사후 추이 및 95% 불확실성 오차 범위를 계산합니다.
-    ///
-    /// - Parameters:
-    ///   - points: 입력 관측 2D 좌표 포인트 배열 (CGPoint)
-    ///   - sampleCount: 보간 생성할 X축 분할 샘플 수 (기본값: 80)
-    ///   - noiseVariance: 관측 노이즈 분산 \(\sigma_n^2\) (기본값: 0.05)
-    /// - Returns: 비선형 베이지안 추이 포인트 배열
     @Sendable
     public static func computeTrend(
         points: [CGPoint],
@@ -83,35 +78,50 @@ public struct BayesianTrendCalculator: Sendable {
         let xs = sampledPoints.map { Double($0.x) }
         let ys = sampledPoints.map { Double($0.y) }
         let n = sampledPoints.count
+        let vlen = vDSP_Length(n)
 
         // Dynamic RBF Length-scale l = rangeX / 2.5 for organic non-linear curvature
         let lengthScale = rangeX / 2.5
         let l2 = 2.0 * lengthScale * lengthScale
+        let invNegL2 = -1.0 / l2
 
-        // Compute local kernel weights K(x_i, x_j) + sigma_n^2 * I
+        // Compute local kernel weights K(x_i, x_j) + sigma_n^2 * I using SIMD vDSP vector operations
         var weightSum = [Double](repeating: 0.0, count: n)
         var weightedY = [Double](repeating: 0.0, count: n)
 
+        var diffBuffer = [Double](repeating: 0.0, count: n)
+        var dist2Buffer = [Double](repeating: 0.0, count: n)
+        var scaledDist2 = [Double](repeating: 0.0, count: n)
+        var kernelWeights = [Double](repeating: 0.0, count: n)
+        var tempWeightedY = [Double](repeating: 0.0, count: n)
+
         for i in 0..<n {
+            let xi = xs[i]
+            let xiVec = [Double](repeating: xi, count: n)
+            vDSP_vsubD(xs, 1, xiVec, 1, &diffBuffer, 1, vlen)
+            vDSP_vsqD(diffBuffer, 1, &dist2Buffer, 1, vlen)
+            var multiplier = invNegL2
+            vDSP_vsmulD(dist2Buffer, 1, &multiplier, &scaledDist2, 1, vlen)
+            vForce.exp(scaledDist2, result: &kernelWeights)
+            vDSP_vmulD(kernelWeights, 1, ys, 1, &tempWeightedY, 1, vlen)
+
             var sumW = 0.0
             var sumY = 0.0
-            for j in 0..<n {
-                let dx = xs[i] - xs[j]
-                let dist2 = dx * dx
-                let w = exp(-dist2 / l2)
-                sumW += w
-                sumY += w * ys[j]
-            }
+            vDSP_sveD(kernelWeights, 1, &sumW, vlen)
+            vDSP_sveD(tempWeightedY, 1, &sumY, vlen)
+
             weightSum[i] = max(sumW, 1e-6)
             weightedY[i] = sumY / weightSum[i]
         }
 
-        // Estimate residual variance
+        // Estimate residual variance with vDSP vector difference
+        var residualDiffs = [Double](repeating: 0.0, count: n)
+        var residualSq = [Double](repeating: 0.0, count: n)
+        vDSP_vsubD(weightedY, 1, ys, 1, &residualDiffs, 1, vlen)
+        vDSP_vsqD(residualDiffs, 1, &residualSq, 1, vlen)
         var residualSum = 0.0
-        for i in 0..<n {
-            let diff = ys[i] - weightedY[i]
-            residualSum += diff * diff
-        }
+        vDSP_sveD(residualSq, 1, &residualSum, vlen)
+
         let s2 = max(residualSum / max(Double(n - 2), 1.0), noiseVariance)
 
         var result: [BayesianTrendPoint] = []
@@ -121,28 +131,25 @@ public struct BayesianTrendCalculator: Sendable {
 
         for idx in 0..<sampleCount {
             let curX = minX + Double(idx) * step
+            let curXVec = [Double](repeating: curX, count: n)
 
-            // Non-linear Gaussian Kernel Nadaraya-Watson Bayesian Posterior Mean \(\mu(x_*)\)
+            vDSP_vsubD(xs, 1, curXVec, 1, &diffBuffer, 1, vlen)
+            vDSP_vsqD(diffBuffer, 1, &dist2Buffer, 1, vlen)
+            var multiplier = invNegL2
+            vDSP_vsmulD(dist2Buffer, 1, &multiplier, &scaledDist2, 1, vlen)
+            vForce.exp(scaledDist2, result: &kernelWeights)
+            vDSP_vmulD(kernelWeights, 1, ys, 1, &tempWeightedY, 1, vlen)
+
             var totalW = 0.0
             var meanY = 0.0
-            var minDist2 = Double.greatestFiniteMagnitude
-            var closestIdx = 0
+            var minDist2 = 0.0
+            vDSP_sveD(kernelWeights, 1, &totalW, vlen)
+            vDSP_sveD(tempWeightedY, 1, &meanY, vlen)
+            vDSP_minvD(dist2Buffer, 1, &minDist2, vlen)
 
-            for i in 0..<n {
-                let dx = curX - xs[i]
-                let dist2 = dx * dx
-                if dist2 < minDist2 {
-                    minDist2 = dist2
-                    closestIdx = i
-                }
-                let w = exp(-dist2 / l2)
-                totalW += w
-                meanY += w * ys[i]
-            }
-
+            let closestIdx = dist2Buffer.firstIndex(of: minDist2) ?? 0
             let mu = totalW > 1e-9 ? meanY / totalW : ys[closestIdx]
 
-            // Distance-based Bayesian Uncertainty expansion: \(\sigma(x_*) = \sqrt{s^2 (1 + d_{min}^2 / l^2)}\)
             let distLeverage = sqrt(minDist2) / max(lengthScale, 1e-6)
             let sigma = sqrt(max(s2 * (1.0 + distLeverage * distLeverage * 0.5), 1e-6))
 

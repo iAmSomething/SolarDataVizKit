@@ -27,8 +27,7 @@ final class CacheBox<T>: NSObject {
     }
 }
 
-@MainActor
-public final class SolarVizLayoutCache {
+public actor SolarVizLayoutCache: Sendable {
     /// 싱글톤 공유 인스턴스입니다.
     public static let shared = SolarVizLayoutCache()
 
