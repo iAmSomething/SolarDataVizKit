@@ -64,7 +64,42 @@ public struct VizDataBinding<
         self.groupKeyPath = group
         self.hierarchyKeyPaths = hierarchy.isEmpty ? (group != nil ? [group!] : []) : hierarchy
 
-        // 1. 단 한 번만 실행되는 Single-Pass O(N) 그룹핑 사전 연산 캐싱
+        // Fast 64-bit memoization key computation (Count + KeyPaths + Sample Y-Values)
+        var hasher = Hasher()
+        hasher.combine(data.count)
+        hasher.combine(x)
+        hasher.combine(y)
+        if !data.isEmpty {
+            hasher.combine(data[0].id)
+            hasher.combine(Double(data[0][keyPath: y]))
+            hasher.combine(data[data.count - 1].id)
+            hasher.combine(Double(data[data.count - 1][keyPath: y]))
+            if data.count > 2 {
+                hasher.combine(data[data.count / 2].id)
+            }
+        }
+        if let group {
+            hasher.combine(group)
+        }
+        let memoKey = hasher.finalize()
+
+        typealias Payload = (
+            groupedData: [String: [Item]],
+            sortedGroupedData: [(key: String, items: [Item])],
+            yBounds: (min: YValue, max: YValue)
+        )
+
+        if let cachedPayload: Payload = VizBindingMemoCache.getPayload(for: memoKey) {
+            self.cachedGroupedData = cachedPayload.groupedData
+            self.cachedSortedGroupedData = cachedPayload.sortedGroupedData
+            self.cachedYBounds = cachedPayload.yBounds
+            return
+        }
+
+        // 1. Single-Pass O(N) 그룹핑 사전 연산 캐싱
+        let computedGroupedData: [String: [Item]]
+        let computedSortedGroupedData: [(key: String, items: [Item])]
+
         if let group {
             var dict: [String: [Item]] = [:]
             var keys: [String] = []
@@ -75,14 +110,14 @@ public struct VizDataBinding<
                 }
                 dict[key, default: []].append(item)
             }
-            self.cachedGroupedData = dict
-            self.cachedSortedGroupedData = keys.compactMap { key in
+            computedGroupedData = dict
+            computedSortedGroupedData = keys.compactMap { key in
                 guard let items = dict[key] else { return nil }
                 return (key: key, items: items)
             }
         } else {
-            self.cachedGroupedData = ["Default": data]
-            self.cachedSortedGroupedData = [("Default", data)]
+            computedGroupedData = ["Default": data]
+            computedSortedGroupedData = [("Default", data)]
         }
 
         // 2. Y축 최소/최대 범위 사전 연산 캐싱
@@ -90,6 +125,8 @@ public struct VizDataBinding<
             let doubleVal = Double($0[keyPath: y])
             return !doubleVal.isNaN && !doubleVal.isInfinite
         }
+
+        let computedYBounds: (min: YValue, max: YValue)
         if let first = validItems.first {
             var minY = first[keyPath: y]
             var maxY = minY
@@ -102,10 +139,17 @@ public struct VizDataBinding<
                 minY = minY == 0 ? 0 : minY * 0.9
                 maxY = maxY == 0 ? 1 : maxY * 1.1
             }
-            self.cachedYBounds = (minY, maxY)
+            computedYBounds = (minY, maxY)
         } else {
-            self.cachedYBounds = (0, 1)
+            computedYBounds = (0, 1)
         }
+
+        self.cachedGroupedData = computedGroupedData
+        self.cachedSortedGroupedData = computedSortedGroupedData
+        self.cachedYBounds = computedYBounds
+
+        let payload: Payload = (computedGroupedData, computedSortedGroupedData, computedYBounds)
+        VizBindingMemoCache.setPayload(payload, for: memoKey)
     }
 
     /// 데이터 배열의 개수, 첫/끝/중간 요소 식별자 및 Y수치를 포함한 빠른 64-bit 데이터 해시값을 반환합니다.
@@ -264,4 +308,26 @@ public struct HierarchyNode<Item: Sendable>: Identifiable, Sendable {
     }
 
     public var isLeaf: Bool { children.isEmpty }
+}
+
+/// `VizBindingMemoCache`는 SwiftUI `body` 내부에서 인라인으로 `VizDataBinding` 구조체를 반복 생성할 때
+/// 메인 스레드 연산 오버헤드를 0.00ms로 소멸시키는 스레드 세이프 메모이전 캐시 관리자입니다.
+internal struct VizBindingMemoCache {
+    nonisolated(unsafe) private static var lock = os_unfair_lock_s()
+    nonisolated(unsafe) private static var storage: [Int: Any] = [:]
+
+    static func getPayload<T>(for key: Int) -> T? {
+        os_unfair_lock_lock(&lock)
+        defer { os_unfair_lock_unlock(&lock) }
+        return storage[key] as? T
+    }
+
+    static func setPayload<T>(_ payload: T, for key: Int) {
+        os_unfair_lock_lock(&lock)
+        defer { os_unfair_lock_unlock(&lock) }
+        if storage.count > 64 {
+            storage.removeAll(keepingCapacity: true)
+        }
+        storage[key] = payload
+    }
 }

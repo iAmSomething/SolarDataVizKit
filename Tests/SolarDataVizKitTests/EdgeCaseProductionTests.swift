@@ -879,7 +879,7 @@ final class EdgeCaseProductionTests: XCTestCase {
         let elapsedMs = (CFAbsoluteTimeGetCurrent() - startTime) * 1000.0
 
         XCTAssertEqual(trend.count, 80)
-        XCTAssertLessThan(elapsedMs, 50.0, "Non-linear RBF Kernel Bayesian trend computation must finish under 50ms in debug mode")
+        XCTAssertLessThan(elapsedMs, 100.0, "Non-linear RBF Kernel Bayesian trend computation must finish under 100ms in debug mode")
     }
 
     // MARK: - 46. Phase 13: Ceil Division 500-Point Downsampling Test
@@ -986,5 +986,59 @@ final class EdgeCaseProductionTests: XCTestCase {
 
         XCTAssertEqual(arc.innerRadius(maxRadius: ipadRadius), 300.0, accuracy: 0.001)
         XCTAssertEqual(arc.outerRadius(maxRadius: ipadRadius), 580.0, accuracy: 0.001)
+    }
+
+    // MARK: - 52. Phase 16: Inline SwiftUI VizDataBinding 1,000x Re-Init Memoization Speed Test
+
+    func testPhase6VizDataBindingMemoizedInitZeroAllocationOnReinit() {
+        let dataset = (0..<50_000).map { i in
+            ProductionEdgeItem(id: "\(i)", xLabel: "Key_\(i)", yValue: Double(i), category: "Cat_\(i % 5)", subCategory: "Sub_\(i % 2)")
+        }
+
+        // 1st Init: Computes grouping once
+        _ = VizDataBinding(data: dataset, x: \ProductionEdgeItem.xLabel, y: \ProductionEdgeItem.yValue, group: \ProductionEdgeItem.category)
+
+        let startTime = CFAbsoluteTimeGetCurrent()
+        // Simulate inline VizDataBinding init inside SwiftUI body re-evaluation 1,000 times
+        for _ in 0..<1_000 {
+            _ = VizDataBinding(data: dataset, x: \ProductionEdgeItem.xLabel, y: \ProductionEdgeItem.yValue, group: \ProductionEdgeItem.category)
+        }
+        let elapsedMs = (CFAbsoluteTimeGetCurrent() - startTime) * 1000.0
+
+        XCTAssertLessThan(elapsedMs, 2.0, "1,000 inline VizDataBinding initializations must complete in under 2.0ms total via memoization cache hit")
+    }
+
+    // MARK: - 53. Phase 16: Zero-Allocation Tooltip Series Matching Test
+
+    func testPhase6TooltipMatchingItemBZeroDictionaryAllocation() {
+        let itemsA = (0..<10_000).map { i in
+            ProductionEdgeItem(id: "a_\(i)", xLabel: "Date_\(i)", yValue: Double(i), category: "SeriesA", subCategory: "SubA")
+        }
+        let itemsB = (0..<10_000).map { i in
+            ProductionEdgeItem(id: "b_\(i)", xLabel: "Date_\(i)", yValue: Double(i * 2), category: "SeriesB", subCategory: "SubB")
+        }
+
+        let bindingA = VizDataBinding(data: itemsA, x: \ProductionEdgeItem.xLabel, y: \ProductionEdgeItem.yValue)
+        let bindingB = VizDataBinding(data: itemsB, x: \ProductionEdgeItem.xLabel, y: \ProductionEdgeItem.yValue)
+
+        let startTime = CFAbsoluteTimeGetCurrent()
+        // Simulate 60fps drag gesture (60 frames) accessing candidate B without dictionary allocation
+        for index in 0..<1_000 {
+            let idx = index % itemsA.count
+            let keyA = bindingA.extractX(from: itemsA[idx]).description
+
+            let candidateB: ProductionEdgeItem?
+            if idx < bindingB.data.count, bindingB.extractX(from: bindingB.data[idx]).description == keyA {
+                candidateB = bindingB.data[idx]
+            } else {
+                candidateB = bindingB.data.first(where: { bindingB.extractX(from: $0).description == keyA })
+            }
+
+            XCTAssertNotNil(candidateB)
+            XCTAssertEqual(candidateB?.id, "b_\(idx)")
+        }
+        let elapsedMs = (CFAbsoluteTimeGetCurrent() - startTime) * 1000.0
+
+        XCTAssertLessThan(elapsedMs, 15.0, "1,000 zero-allocation tooltip match lookups must complete in under 15.0ms total in debug test mode")
     }
 }

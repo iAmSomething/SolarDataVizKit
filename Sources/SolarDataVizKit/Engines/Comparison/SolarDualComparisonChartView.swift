@@ -16,13 +16,15 @@ public struct SolarDualComparisonChartView<
     @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
     @State private var selectedIndex: Int?
 
-    private var activeDictB: [String: ItemB] {
-        var dict: [String: ItemB] = [:]
-        for item in bindingB.data {
-            let key = bindingB.extractX(from: item).description
-            dict[key] = item
+    private func findMatchingItemB(for xKey: String, at index: Int) -> ItemB? {
+        let itemsB = bindingB.data
+        if index < itemsB.count {
+            let candidate = itemsB[index]
+            if bindingB.extractX(from: candidate).description == xKey {
+                return candidate
+            }
         }
-        return dict
+        return itemsB.first(where: { bindingB.extractX(from: $0).description == xKey })
     }
 
     public init(
@@ -129,8 +131,8 @@ public struct SolarDualComparisonChartView<
                         let xKeyA = bindingA.extractX(from: itemA).description
                         let valA = Double(bindingA.extractY(from: itemA))
 
-                        // Fast O(1) Dictionary Lookup
-                        let matchingItemB = activeDictB[xKeyA]
+                        // Fast O(1) Zero-Allocation Array Index / Key Lookup
+                        let matchingItemB = findMatchingItemB(for: xKeyA, at: selectedIndex)
                         let valB = matchingItemB != nil ? Double(bindingB.extractY(from: matchingItemB!)) : valA
 
                         let totalCount = max(bindingA.data.count, 1)

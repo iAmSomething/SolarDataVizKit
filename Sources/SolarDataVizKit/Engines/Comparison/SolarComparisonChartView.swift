@@ -41,15 +41,6 @@ public struct SolarComparisonChartView<
         return groups.first(where: { $0.key == seriesB })?.items ?? groups.dropFirst().first?.items ?? []
     }
 
-    private var activeDictB: [String: Item] {
-        var dict: [String: Item] = [:]
-        for item in activeItemsB {
-            let key = binding.extractX(from: item).description
-            dict[key] = item
-        }
-        return dict
-    }
-
     public let initialSelectedIndex: Int?
     public let showIntersectionRegions: Bool
 
@@ -143,8 +134,8 @@ public struct SolarComparisonChartView<
                         let xKeyA = binding.extractX(from: itemA).description
                         let valA = Double(binding.extractY(from: itemA))
 
-                        // Fast O(1) Dictionary Lookup
-                        let matchingItemB = activeDictB[xKeyA]
+                        // Fast O(1) Zero-Allocation Array Index / Key Lookup
+                        let matchingItemB = findMatchingItemB(for: xKeyA, at: selectedIndex, itemsB: activeItemsB)
                         let valB = matchingItemB != nil ? Double(binding.extractY(from: matchingItemB!)) : valA
 
                         let totalCount = max(activeItemsA.count, 1)
@@ -213,17 +204,29 @@ public struct SolarComparisonChartView<
         }
     }
 
+    private func findMatchingItemB(for xKey: String, at index: Int, itemsB: [Item]) -> Item? {
+        if index < itemsB.count {
+            let candidate = itemsB[index]
+            if binding.extractX(from: candidate).description == xKey {
+                return candidate
+            }
+        }
+        return itemsB.first(where: { binding.extractX(from: $0).description == xKey })
+    }
+
     private func checkIntersectionHaptic(at index: Int) {
-        guard index > 0, index < activeItemsA.count else { return }
-        let currA = activeItemsA[index]
-        let prevA = activeItemsA[index - 1]
+        let itemsA = activeItemsA
+        let itemsB = activeItemsB
+        guard index > 0, index < itemsA.count else { return }
+        let currA = itemsA[index]
+        let prevA = itemsA[index - 1]
 
         let keyCurr = binding.extractX(from: currA).description
         let keyPrev = binding.extractX(from: prevA).description
 
-        // Key-based join lookup for series B matching exact X-keys preventing out-of-range crashes
-        guard let currB = activeItemsB.first(where: { binding.extractX(from: $0).description == keyCurr }),
-              let prevB = activeItemsB.first(where: { binding.extractX(from: $0).description == keyPrev }) else { return }
+        // Key-based join lookup with O(1) index check for series B matching exact X-keys
+        guard let currB = findMatchingItemB(for: keyCurr, at: index, itemsB: itemsB),
+              let prevB = findMatchingItemB(for: keyPrev, at: index - 1, itemsB: itemsB) else { return }
 
         let prevDiff = Double(binding.extractY(from: prevA)) - Double(binding.extractY(from: prevB))
         let currDiff = Double(binding.extractY(from: currA)) - Double(binding.extractY(from: currB))
