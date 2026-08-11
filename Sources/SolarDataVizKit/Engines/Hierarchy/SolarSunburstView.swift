@@ -88,6 +88,7 @@ public struct SolarSunburstView<
 
     @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
     @State private var selectedArcID: String?
+    @State private var cachedArcs: [SunburstArc<Item>]
 
     public init(
         binding: VizDataBinding<Item, XValue, YValue>,
@@ -95,6 +96,7 @@ public struct SolarSunburstView<
     ) {
         self.binding = binding
         self._selectedArcID = State(initialValue: initialSelectedArcID)
+        self._cachedArcs = State(initialValue: binding.sunburstArcs())
     }
 
     public var body: some View {
@@ -103,7 +105,7 @@ public struct SolarSunburstView<
         GeometryReader { geometry in
             let center = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
             let maxRadius = min(geometry.size.width, geometry.size.height) / 2
-            let arcs = binding.sunburstArcs()
+            let arcs = cachedArcs
 
             ZStack {
                 ForEach(arcs) { arc in
@@ -141,6 +143,13 @@ public struct SolarSunburstView<
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Concentric Sunburst Donut Chart")
         .accessibilityValue("\(binding.data.count) data elements")
+        .task(id: binding.dataHash) {
+            let targetBinding = binding
+            let newArcs = await Task.detached(priority: .userInitiated) {
+                targetBinding.sunburstArcs()
+            }.value
+            self.cachedArcs = newArcs
+        }
     }
 
     @ViewBuilder

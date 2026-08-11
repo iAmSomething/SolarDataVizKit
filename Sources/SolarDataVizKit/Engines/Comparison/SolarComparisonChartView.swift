@@ -30,15 +30,14 @@ public struct SolarComparisonChartView<
     @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
     @State private var selectedIndex: Int?
     @State private var previousCrossIndex: Int?
+    @State private var sortedGroups: [(key: String, items: [Item])]
 
     private var activeItemsA: [Item] {
-        let groups = binding.sortedGroupedData()
-        return groups.first(where: { $0.key == seriesA })?.items ?? groups.first?.items ?? []
+        return sortedGroups.first(where: { $0.key == seriesA })?.items ?? sortedGroups.first?.items ?? []
     }
 
     private var activeItemsB: [Item] {
-        let groups = binding.sortedGroupedData()
-        return groups.first(where: { $0.key == seriesB })?.items ?? groups.dropFirst().first?.items ?? []
+        return sortedGroups.first(where: { $0.key == seriesB })?.items ?? sortedGroups.dropFirst().first?.items ?? []
     }
 
     public let initialSelectedIndex: Int?
@@ -57,6 +56,7 @@ public struct SolarComparisonChartView<
         self.initialSelectedIndex = initialSelectedIndex
         self.showIntersectionRegions = showIntersectionRegions
         self._selectedIndex = State(initialValue: initialSelectedIndex)
+        self._sortedGroups = State(initialValue: binding.sortedGroupedData())
     }
     public var body: some View {
         let theme = environmentTheme
@@ -201,6 +201,13 @@ public struct SolarComparisonChartView<
         .accessibilityValue("\(activeItemsA.count) data points. Touch or drag to inspect delta values.")
         .onChange(of: initialSelectedIndex) { newValue in
             selectedIndex = newValue
+        }
+        .task(id: binding.dataHash) {
+            let targetBinding = binding
+            let newGroups = await Task.detached(priority: .userInitiated) {
+                targetBinding.sortedGroupedData()
+            }.value
+            self.sortedGroups = newGroups
         }
     }
 
