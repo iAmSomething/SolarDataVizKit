@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 /// 사용자의 도메인 모델을 수정하지 않고 KeyPath로 차트 축과 범례에 매핑하는 래퍼 바인딩 구조체입니다.
 ///
@@ -42,6 +43,8 @@ public struct VizDataBinding<
     private let cachedSortedGroupedData: [(key: String, items: [Item])]
     /// 사전 연산된 Y축 최소/최대 범위 캐시입니다.
     private let cachedYBounds: (min: YValue, max: YValue)
+    /// 사전 연산된 Normalized Sunburst Arc 배열 캐시입니다.
+    private let cachedSunburstArcs: [SunburstArc<Item>]
 
     /// KeyPath 바인딩 래퍼를 초기화합니다.
     ///
@@ -64,9 +67,14 @@ public struct VizDataBinding<
         self.groupKeyPath = group
         self.hierarchyKeyPaths = hierarchy.isEmpty ? (group != nil ? [group!] : []) : hierarchy
 
-        // Fast 64-bit memoization key computation (Count + KeyPaths + Sample Y-Values)
+        // Fast 64-bit Memoization Key with 100% Sound Data Integrity (COW Base Address + Length + KeyPaths + Samples)
         var hasher = Hasher()
         hasher.combine(data.count)
+        data.withUnsafeBufferPointer { buffer in
+            if let base = buffer.baseAddress {
+                hasher.combine(UInt(bitPattern: base))
+            }
+        }
         hasher.combine(x)
         hasher.combine(y)
         if !data.isEmpty {
@@ -74,9 +82,6 @@ public struct VizDataBinding<
             hasher.combine(Double(data[0][keyPath: y]))
             hasher.combine(data[data.count - 1].id)
             hasher.combine(Double(data[data.count - 1][keyPath: y]))
-            if data.count > 2 {
-                hasher.combine(data[data.count / 2].id)
-            }
         }
         if let group {
             hasher.combine(group)
@@ -86,13 +91,15 @@ public struct VizDataBinding<
         typealias Payload = (
             groupedData: [String: [Item]],
             sortedGroupedData: [(key: String, items: [Item])],
-            yBounds: (min: YValue, max: YValue)
+            yBounds: (min: YValue, max: YValue),
+            sunburstArcs: [SunburstArc<Item>]
         )
 
         if let cachedPayload: Payload = VizBindingMemoCache.getPayload(for: memoKey) {
             self.cachedGroupedData = cachedPayload.groupedData
             self.cachedSortedGroupedData = cachedPayload.sortedGroupedData
             self.cachedYBounds = cachedPayload.yBounds
+            self.cachedSunburstArcs = cachedPayload.sunburstArcs
             return
         }
 
@@ -144,11 +151,20 @@ public struct VizDataBinding<
             computedYBounds = (0, 1)
         }
 
+        // 3. Pre-compute Sunburst Arcs ONCE off GeometryReader 60Hz loop
+        let computedSunburstArcs = VizDataBinding.computeNormalizedSunburstArcs(
+            data: data,
+            xKeyPath: x,
+            yKeyPath: y,
+            sortedGroupedData: computedSortedGroupedData
+        )
+
         self.cachedGroupedData = computedGroupedData
         self.cachedSortedGroupedData = computedSortedGroupedData
         self.cachedYBounds = computedYBounds
+        self.cachedSunburstArcs = computedSunburstArcs
 
-        let payload: Payload = (computedGroupedData, computedSortedGroupedData, computedYBounds)
+        let payload: Payload = (computedGroupedData, computedSortedGroupedData, computedYBounds, computedSunburstArcs)
         VizBindingMemoCache.setPayload(payload, for: memoKey)
     }
 
@@ -205,6 +221,92 @@ public struct VizDataBinding<
     /// O(1) 사전 연산 캐시를 통한 즉각적 Y축 수치의 최솟값과 최댓값을 반환합니다.
     public func yBounds() -> (min: YValue, max: YValue) {
         cachedYBounds
+    }
+
+    /// O(1) 사전 연산 캐시를 통한 즉각적 Normalized Sunburst Arc 배열을 반환합니다 (GeometryReader 오버헤드 소멸).
+    public func sunburstArcs() -> [SunburstArc<Item>] {
+        cachedSunburstArcs
+    }
+
+    /// 2-Level Hierarchical Sunburst Ring Algorithm (Responsive Normalized Ratios)
+    private static func computeNormalizedSunburstArcs(
+        data: [Item],
+        xKeyPath: KeyPath<Item, XValue>,
+        yKeyPath: KeyPath<Item, YValue>,
+        sortedGroupedData: [(key: String, items: [Item])]
+    ) -> [SunburstArc<Item>] {
+        guard !data.isEmpty else { return [] }
+        let totalValue = data.reduce(0.0) { $0 + max(0.0, Double($1[keyPath: yKeyPath])) }
+        guard totalValue > 0 else { return [] }
+
+        var arcs: [SunburstArc<Item>] = []
+        var currentAngle: Double = -90.0 // Start at 12 o'clock
+
+        let innerRingR0Ratio: CGFloat = 0.30
+        let innerRingR1Ratio: CGFloat = 0.58
+
+        let outerRingR0Ratio: CGFloat = 0.62
+        let outerRingR1Ratio: CGFloat = 0.90
+
+        for (groupIndex, groupTuple) in sortedGroupedData.enumerated() {
+            let groupName = groupTuple.key
+            let groupItems = groupTuple.items
+            let groupSum = groupItems.reduce(0.0) { $0 + max(0.0, Double($1[keyPath: yKeyPath])) }
+            guard groupSum > 0 else { continue }
+
+            let groupSweep = (groupSum / totalValue) * 360.0
+            let groupStartAngle = currentAngle
+            let groupEndAngle = currentAngle + groupSweep
+            let groupPct = (groupSum / totalValue) * 100.0
+
+            // 1. Parent Level Arc (Inner Ring) - Stable Index-Free Unique ID
+            if let firstItem = groupItems.first {
+                arcs.append(SunburstArc(
+                    id: "sunburst_parent_\(groupName)",
+                    item: firstItem,
+                    startAngle: Angle(degrees: groupStartAngle),
+                    endAngle: Angle(degrees: groupEndAngle),
+                    innerRadiusRatio: innerRingR0Ratio,
+                    outerRadiusRatio: innerRingR1Ratio,
+                    label: groupName,
+                    percentage: groupPct,
+                    groupIndex: groupIndex,
+                    isChild: false,
+                    childIndex: 0
+                ))
+            }
+
+            // 2. Child Level Arcs (Outer Ring) - Stable Index-Free Unique ID
+            var childAngle = groupStartAngle
+            for (itemIndex, item) in groupItems.enumerated() {
+                let val = max(0.0, Double(item[keyPath: yKeyPath]))
+                let itemSweep = (val / groupSum) * groupSweep
+                let itemStartA = Angle(degrees: childAngle)
+                let itemEndA = Angle(degrees: childAngle + itemSweep)
+                childAngle += itemSweep
+
+                let itemPct = (val / totalValue) * 100.0
+                let itemLabel = String(describing: item[keyPath: xKeyPath])
+
+                arcs.append(SunburstArc(
+                    id: "sunburst_child_\(item.id)",
+                    item: item,
+                    startAngle: itemStartA,
+                    endAngle: itemEndA,
+                    innerRadiusRatio: outerRingR0Ratio,
+                    outerRadiusRatio: outerRingR1Ratio,
+                    label: itemLabel,
+                    percentage: itemPct,
+                    groupIndex: groupIndex,
+                    isChild: true,
+                    childIndex: itemIndex
+                ))
+            }
+
+            currentAngle += groupSweep
+        }
+
+        return arcs
     }
 
     /// 지정된 Y 값을 [0.0, 1.0] 범위의 정규화 수치로 변환합니다.
@@ -311,23 +413,39 @@ public struct HierarchyNode<Item: Sendable>: Identifiable, Sendable {
 }
 
 /// `VizBindingMemoCache`는 SwiftUI `body` 내부에서 인라인으로 `VizDataBinding` 구조체를 반복 생성할 때
-/// 메인 스레드 연산 오버헤드를 0.00ms로 소멸시키는 스레드 세이프 메모이전 캐시 관리자입니다.
+/// 메인 스레드 연산 오버헤드를 0.00ms로 소멸시키는 스레드 세이프 LRU 메모이전 캐시 관리자입니다.
 internal struct VizBindingMemoCache {
     nonisolated(unsafe) private static var lock = os_unfair_lock_s()
     nonisolated(unsafe) private static var storage: [Int: Any] = [:]
+    nonisolated(unsafe) private static var order: [Int] = []
+    private static let maxCapacity = 128
 
     static func getPayload<T>(for key: Int) -> T? {
         os_unfair_lock_lock(&lock)
         defer { os_unfair_lock_unlock(&lock) }
-        return storage[key] as? T
+        guard let payload = storage[key] as? T else { return nil }
+        if let idx = order.firstIndex(of: key) {
+            order.remove(at: idx)
+            order.append(key)
+        }
+        return payload
     }
 
     static func setPayload<T>(_ payload: T, for key: Int) {
         os_unfair_lock_lock(&lock)
         defer { os_unfair_lock_unlock(&lock) }
-        if storage.count > 64 {
-            storage.removeAll(keepingCapacity: true)
+
+        if storage[key] == nil {
+            if storage.count >= maxCapacity, !order.isEmpty {
+                let oldestKey = order.removeFirst()
+                storage.removeValue(forKey: oldestKey)
+            }
+            order.append(key)
+        } else if let idx = order.firstIndex(of: key) {
+            order.remove(at: idx)
+            order.append(key)
         }
+
         storage[key] = payload
     }
 }

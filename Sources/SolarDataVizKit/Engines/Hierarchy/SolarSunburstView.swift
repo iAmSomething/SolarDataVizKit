@@ -103,7 +103,7 @@ public struct SolarSunburstView<
         GeometryReader { geometry in
             let center = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
             let maxRadius = min(geometry.size.width, geometry.size.height) / 2
-            let arcs = computeArcs()
+            let arcs = binding.sunburstArcs()
 
             ZStack {
                 ForEach(arcs) { arc in
@@ -199,83 +199,5 @@ public struct SolarSunburstView<
                 SolarVizHaptics.shared.playSelection()
             }
         }
-    }
-
-    /// 2-Level Hierarchical Sunburst Ring Algorithm (Responsive Normalized Ratios)
-    private func computeArcs() -> [SunburstArc<Item>] {
-        guard !binding.data.isEmpty else { return [] }
-        let totalValue = binding.data.reduce(0.0) { $0 + max(0.0, Double(binding.extractY(from: $1))) }
-        guard totalValue > 0 else { return [] }
-
-        var arcs: [SunburstArc<Item>] = []
-        var currentAngle: Double = -90.0 // Start at 12 o'clock
-
-        let innerRingR0Ratio: CGFloat = 0.30
-        let innerRingR1Ratio: CGFloat = 0.58
-
-        let outerRingR0Ratio: CGFloat = 0.62
-        let outerRingR1Ratio: CGFloat = 0.90
-
-        let sortedGroupedData = binding.sortedGroupedData()
-
-        for (groupIndex, groupTuple) in sortedGroupedData.enumerated() {
-            let groupName = groupTuple.key
-            let groupItems = groupTuple.items
-            let groupSum = groupItems.reduce(0.0) { $0 + max(0.0, Double(binding.extractY(from: $1))) }
-            guard groupSum > 0 else { continue }
-
-            let groupSweep = (groupSum / totalValue) * 360.0
-            let groupStartAngle = currentAngle
-            let groupEndAngle = currentAngle + groupSweep
-            let groupPct = (groupSum / totalValue) * 100.0
-
-            // 1. Parent Level Arc (Inner Ring) - Stable Index-Free Unique ID
-            if let firstItem = groupItems.first {
-                arcs.append(SunburstArc(
-                    id: "sunburst_parent_\(groupName)",
-                    item: firstItem,
-                    startAngle: Angle(degrees: groupStartAngle),
-                    endAngle: Angle(degrees: groupEndAngle),
-                    innerRadiusRatio: innerRingR0Ratio,
-                    outerRadiusRatio: innerRingR1Ratio,
-                    label: groupName,
-                    percentage: groupPct,
-                    groupIndex: groupIndex,
-                    isChild: false,
-                    childIndex: 0
-                ))
-            }
-
-            // 2. Child Level Arcs (Outer Ring) - Stable Index-Free Unique ID
-            var childAngle = groupStartAngle
-            for (itemIndex, item) in groupItems.enumerated() {
-                let val = max(0.0, Double(binding.extractY(from: item)))
-                let itemSweep = (val / groupSum) * groupSweep
-                let itemStartA = Angle(degrees: childAngle)
-                let itemEndA = Angle(degrees: childAngle + itemSweep)
-                childAngle += itemSweep
-
-                let itemPct = (val / totalValue) * 100.0
-                let itemLabel = binding.extractX(from: item).description
-
-                arcs.append(SunburstArc(
-                    id: "sunburst_child_\(item.id)",
-                    item: item,
-                    startAngle: itemStartA,
-                    endAngle: itemEndA,
-                    innerRadiusRatio: outerRingR0Ratio,
-                    outerRadiusRatio: outerRingR1Ratio,
-                    label: itemLabel,
-                    percentage: itemPct,
-                    groupIndex: groupIndex,
-                    isChild: true,
-                    childIndex: itemIndex
-                ))
-            }
-
-            currentAngle += groupSweep
-        }
-
-        return arcs
     }
 }
