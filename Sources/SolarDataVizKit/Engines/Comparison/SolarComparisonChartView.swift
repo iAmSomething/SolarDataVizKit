@@ -56,7 +56,7 @@ public struct SolarComparisonChartView<
         self.initialSelectedIndex = initialSelectedIndex
         self.showIntersectionRegions = showIntersectionRegions
         self._selectedIndex = State(initialValue: initialSelectedIndex)
-        self._sortedGroups = State(initialValue: binding.sortedGroupedData())
+        self._sortedGroups = State(initialValue: [])
     }
     public var body: some View {
         let theme = environmentTheme

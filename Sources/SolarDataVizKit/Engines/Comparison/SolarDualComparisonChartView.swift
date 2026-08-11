@@ -15,6 +15,7 @@ public struct SolarDualComparisonChartView<
     public let labelB: String
     @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
     @State private var selectedIndex: Int?
+    @State private var itemBDict: [String: ItemB] = [:]
 
     private func findMatchingItemB(for xKey: String, at index: Int) -> ItemB? {
         let itemsB = bindingB.data
@@ -24,7 +25,7 @@ public struct SolarDualComparisonChartView<
                 return candidate
             }
         }
-        return itemsB.first(where: { bindingB.extractX(from: $0).description == xKey })
+        return itemBDict[xKey]
     }
 
     public init(
@@ -191,5 +192,19 @@ public struct SolarDualComparisonChartView<
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Heterogenous Dual Comparison Line Chart, \(labelA) versus \(labelB)")
+        .task(id: bindingB.dataHash) {
+            let targetBindingB = bindingB
+            let dict = await Task.detached(priority: .userInitiated) {
+                var map: [String: ItemB] = [:]
+                for item in targetBindingB.data {
+                    let key = targetBindingB.extractX(from: item).description
+                    if map[key] == nil {
+                        map[key] = item
+                    }
+                }
+                return map
+            }.value
+            self.itemBDict = dict
+        }
     }
 }

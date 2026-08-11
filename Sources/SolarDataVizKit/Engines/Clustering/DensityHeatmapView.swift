@@ -12,16 +12,14 @@ import SwiftUI
 /// DensityHeatmapView(nodes: clusterNodes, theme: .darkCarbon)
 /// ```
 public struct DensityHeatmapView: View {
-    public let nodes: [ClusterNode]
+    public let renderableNodes: [ClusterNode]
     @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
 
     public init(nodes: [ClusterNode]) {
-        self.nodes = nodes
+        self.renderableNodes = Array(nodes.sorted(by: { $0.count > $1.count }).prefix(250))
     }
 
     public var body: some View {
-        let renderableNodes = Array(nodes.sorted(by: { $0.count > $1.count }).prefix(250))
-
         Canvas { context, size in
             for node in renderableNodes {
                 let rect = CGRect(

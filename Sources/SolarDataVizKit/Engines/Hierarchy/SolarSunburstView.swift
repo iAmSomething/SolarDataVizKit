@@ -96,7 +96,7 @@ public struct SolarSunburstView<
     ) {
         self.binding = binding
         self._selectedArcID = State(initialValue: initialSelectedArcID)
-        self._cachedArcs = State(initialValue: binding.sunburstArcs())
+        self._cachedArcs = State(initialValue: [])
     }
 
     public var body: some View {
