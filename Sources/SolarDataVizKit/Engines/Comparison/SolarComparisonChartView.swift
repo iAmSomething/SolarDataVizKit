@@ -48,6 +48,16 @@ public struct SolarComparisonChartView<
     private let placeholder: () -> Placeholder
     public var onPointSelected: ((Item?, Item?) -> Void)?
 
+    /// 다중 시리즈 비교 차트를 초기화합니다.
+    ///
+    /// - Parameters:
+    ///   - binding: X, Y, Group 키패스가 정의된 데이터 바인딩 객체
+    ///   - seriesA: 첫 번째 데이터 시리즈의 범례 이름
+    ///   - seriesB: 두 번째 데이터 시리즈의 범례 이름 (점선으로 표시)
+    ///   - initialSelectedIndex: 초기 로드 시 툴팁을 표시할 인덱스
+    ///   - showIntersectionRegions: 교차 영역 필(Fill) 표시 여부
+    ///   - onPointSelected: 터치 드래그 시 호출되는 (ItemA, ItemB) 콜백
+    ///   - placeholder: 데이터가 없을 때 표시할 커스텀 뷰 클로저
     public init(
         binding: VizDataBinding<Item, XValue, YValue>,
         seriesA: String = "Series A",
@@ -225,14 +235,20 @@ public struct SolarComparisonChartView<
             selectedIndex = newValue
         }
         .task(id: binding.versionToken) {
-            let targetBinding = binding
-            let newGroups = await Task.detached(priority: .userInitiated) {
-                targetBinding.sortedGroupedData()
-            }.value
-            withAnimation(SolarVizAnimation.dataLoad) {
-                self.sortedGroups = newGroups
+            let newGroups = await groupItemsOffMainThread(binding: binding)
+            if !Task.isCancelled {
+                withAnimation(SolarVizAnimation.dataLoad) {
+                    self.sortedGroups = newGroups
+                }
             }
         }
+    }
+
+    nonisolated private func groupItemsOffMainThread(
+        binding: VizDataBinding<Item, XValue, YValue>
+    ) async -> [(key: String, items: [Item])] {
+        if Task.isCancelled { return [] }
+        return binding.sortedGroupedData()
     }
 
     private func findMatchingItemB(for xKey: String, at index: Int, itemsB: [Item]) -> Item? {

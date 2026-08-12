@@ -270,8 +270,7 @@ final class EdgeCaseProductionTests: XCTestCase {
         let binding = VizDataBinding(data: items, x: \.xLabel, y: \.yValue)
         XCTAssertEqual(binding.extractX(from: items[0]), "Category Alpha")
         let view = SolarClusterScatterView(binding: binding)
-        let geometry = try view.inspect().geometryReader()
-        XCTAssertNotNil(geometry)
+        _ = try view.inspect().find(ViewType.GeometryReader.self)
     }
 
     // MARK: - 15. Real Identifiable Item ID In TreeTile
@@ -325,8 +324,7 @@ final class EdgeCaseProductionTests: XCTestCase {
 
         let binding = VizDataBinding(data: items, x: \.xLabel, y: \.yValue, group: \.category)
         let sunburst = SolarSunburstView(binding: binding)
-        let geometry = try sunburst.inspect().geometryReader()
-        XCTAssertNotNil(geometry)
+        _ = try sunburst.inspect().find(ViewType.GeometryReader.self)
     }
 
     // MARK: - 19. Single Pass O(N) sortedGroupedData Test
@@ -348,7 +346,7 @@ final class EdgeCaseProductionTests: XCTestCase {
     // MARK: - 20. Treemap Custom Layout Strategy Injection Test
 
     @MainActor
-    func testTreemapStrategyPatternCustomSliceAndDice() {
+    func testTreemapStrategyPatternCustomSliceAndDice() throws {
         let items = [
             ProductionEdgeItem(id: "1", xLabel: "A", yValue: 50.0, category: "C", subCategory: "S"),
             ProductionEdgeItem(id: "2", xLabel: "B", yValue: 50.0, category: "C", subCategory: "S")
@@ -356,7 +354,7 @@ final class EdgeCaseProductionTests: XCTestCase {
 
         let binding = VizDataBinding(data: items, x: \.xLabel, y: \.yValue)
         let sliceAndDiceView = SolarTreeMapView(binding: binding, strategy: SliceAndDiceTreemapStrategy())
-        XCTAssertNotNil(sliceAndDiceView)
+        _ = try sliceAndDiceView.inspect().find(ViewType.GeometryReader.self)
 
         let tiles = SliceAndDiceTreemapStrategy().computeTiles(
             data: items,
@@ -378,8 +376,7 @@ final class EdgeCaseProductionTests: XCTestCase {
 
         let binding = VizDataBinding(data: items, x: \.xLabel, y: \.yValue, group: \.category)
         let sunburst = SolarSunburstView(binding: binding)
-        let geometry = try sunburst.inspect().geometryReader()
-        XCTAssertNotNil(geometry)
+        _ = try sunburst.inspect().find(ViewType.GeometryReader.self)
     }
 
     // MARK: - 22. Heterogenous Dual Model Comparison Test
@@ -409,8 +406,7 @@ final class EdgeCaseProductionTests: XCTestCase {
             labelA: "Sales Revenue",
             labelB: "Operating Expenses"
         )
-        let geometry = try dualChart.inspect().geometryReader()
-        XCTAssertNotNil(geometry)
+        _ = try dualChart.inspect().find(ViewType.GeometryReader.self)
     }
 
     // MARK: - 23. Real-World Financial Time Series FX Rates Test
@@ -760,9 +756,12 @@ final class EdgeCaseProductionTests: XCTestCase {
         let bindingA = VizDataBinding(data: itemsA, x: \.id, y: \.val)
 
         itemsA[1].val = 999.0 // Mutate middle element value
+        
+        // When updating data, a new binding instance must have a uniquely generated version token
+        // to guarantee .task(id:) modifier re-renders in SwiftUI.
         let bindingB = VizDataBinding(data: itemsA, x: \.id, y: \.val)
 
-        XCTAssertNotEqual(bindingA.versionToken, bindingB.versionToken, "Mutating mid-array element Y value must produce distinct versionToken triggering reactive task updates")
+        XCTAssertNotEqual(bindingA.versionToken, bindingB.versionToken, "데이터 변경 시 새로운 versionToken이 발급되어야 합니다.")
     }
 
     // MARK: - 38. Phase 8: O(N) Two-Pointer Interpolation Performance Test (10,000 Points)
@@ -1022,7 +1021,7 @@ final class EdgeCaseProductionTests: XCTestCase {
     // MARK: - 53. Phase 16: Zero-Allocation Tooltip Series Matching Test
 
     @MainActor
-    func testPhase6TooltipMatchingItemBZeroDictionaryAllocation() throws {
+    func testPhase6TooltipMatchingItemBZeroDictionaryAllocation() async throws {
         let itemsA = (0..<10_000).map { i in
             ProductionEdgeItem(id: "a_\(i)", xLabel: "Date_\(i)", yValue: Double(i), category: "SeriesA", subCategory: "SubA")
         }
@@ -1034,8 +1033,14 @@ final class EdgeCaseProductionTests: XCTestCase {
         let bindingB = VizDataBinding(data: itemsB, x: \ProductionEdgeItem.xLabel, y: \ProductionEdgeItem.yValue)
 
         let chart = SolarDualComparisonChartView(bindingA: bindingA, bindingB: bindingB, labelA: "Series A", labelB: "Series B")
-        let geometry = try chart.inspect().geometryReader()
-        XCTAssertNotNil(geometry)
+        
+        let start = CFAbsoluteTimeGetCurrent()
+        let dict = await chart.groupDualItemsOffMainThread(bindingB: bindingB)
+        let elapsedMs = (CFAbsoluteTimeGetCurrent() - start) * 1000.0
+        
+        XCTAssertEqual(dict.count, 10_000)
+        XCTAssertNotNil(dict["Date_9999"])
+        XCTAssertLessThan(elapsedMs, 50.0, "10K Item O(1) Dictionary allocation must finish under 50ms in debug mode")
     }
 
     // MARK: - 54. Phase 18: In-Place Single Element Mutation Pure SwiftUI Data Integrity Test

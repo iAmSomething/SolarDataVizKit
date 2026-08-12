@@ -28,6 +28,14 @@ public struct SolarTreeMapView<
     private let placeholder: () -> Placeholder
     public var onTileSelected: ((Item?) -> Void)?
 
+    /// 트리맵 뷰를 초기화합니다.
+    ///
+    /// - Parameters:
+    ///   - binding: 시각화할 데이터 바인딩 래퍼
+    ///   - strategy: 트리맵 타일 레이아웃 연산 전략 (기본값: `SquarifiedTreemapStrategy`)
+    ///   - initialSelectedTileID: 초기 진입 시 선택 상태를 가질 타일의 ID
+    ///   - onTileSelected: 타일 터치 시 원본 Item을 반환하는 콜백 클로저
+    ///   - placeholder: 데이터가 없을 때 렌더링될 뷰
     public init(
         binding: VizDataBinding<Item, XValue, YValue>,
         strategy: any TreemapLayoutStrategy = SquarifiedTreemapStrategy(),
@@ -63,20 +71,19 @@ public struct SolarTreeMapView<
             .task(id: "\(binding.versionToken)_\(geometry.size.width)x\(geometry.size.height)") {
                 guard geometry.size.width > 10, geometry.size.height > 10 else { return }
                 let rect = CGRect(origin: .zero, size: geometry.size)
-                let localBinding = binding
-                let localStrategy = strategy
                 
-                let newTiles = await Task.detached(priority: .userInitiated) {
-                    localStrategy.computeTiles(
-                        data: localBinding.data,
-                        extractY: { Double(localBinding.extractY(from: $0)) },
-                        extractID: { String(describing: $0.id) },
-                        bounds: rect
-                    )
-                }.value
+                let newTiles = await computeTilesOffMainThread(
+                    data: binding.data,
+                    strategy: strategy,
+                    extractY: { Double(binding.extractY(from: $0)) },
+                    extractID: { String(describing: $0.id) },
+                    bounds: rect
+                )
                 
-                withAnimation(SolarVizAnimation.layoutReflow) {
-                    self.tiles = newTiles
+                if !Task.isCancelled {
+                    withAnimation(SolarVizAnimation.layoutReflow) {
+                        self.tiles = newTiles
+                    }
                 }
             }
         }
@@ -92,6 +99,22 @@ public struct SolarTreeMapView<
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Treemap Category Allocation Chart")
         .accessibilityValue("\(binding.data.count) tiles total")
+    }
+
+    nonisolated func computeTilesOffMainThread(
+        data: [Item],
+        strategy: any TreemapLayoutStrategy,
+        extractY: @escaping @Sendable (Item) -> Double,
+        extractID: @escaping @Sendable (Item) -> String,
+        bounds: CGRect
+    ) async -> [TreeTile<Item>] {
+        if Task.isCancelled { return [] }
+        return strategy.computeTiles(
+            data: data,
+            extractY: extractY,
+            extractID: extractID,
+            bounds: bounds
+        )
     }
 
     @ViewBuilder

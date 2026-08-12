@@ -40,6 +40,13 @@ public struct VizDataBinding<
     public let versionToken: UUID
 
     /// KeyPath 바인딩 래퍼를 초기화합니다.
+    ///
+    /// - Parameters:
+    ///   - data: 시각화할 원본 도메인 모델 배열
+    ///   - x: X축 값으로 매핑할 KeyPath
+    ///   - y: Y축 값으로 매핑할 KeyPath
+    ///   - group: 범례/그룹 식별용 KeyPath (선택사항)
+    ///   - hierarchy: 계층형 구조(Sunburst, TreeMap)를 생성하기 위한 KeyPath 배열 (선택사항)
     public init(
         data: [Item],
         x: KeyPath<Item, XValue>,

@@ -34,6 +34,13 @@ public struct SolarClusterScatterView<
     private let placeholder: () -> Placeholder
     public var onNodeSelected: (([Item]) -> Void)?
 
+    /// 클러스터링 산점도 뷰를 초기화합니다.
+    ///
+    /// - Parameters:
+    ///   - binding: 시각화할 데이터 바인딩 래퍼
+    ///   - clusterRadiusThreshold: 노드가 병합되기 위한 최소 근접 반경 (기본값: 40.0)
+    ///   - onNodeSelected: 노드(또는 클러스터) 탭 시 포함된 모든 원본 아이템 배열을 반환하는 콜백
+    ///   - placeholder: 데이터가 없을 때 표시할 뷰
     public init(
         binding: VizDataBinding<Item, XValue, YValue>,
         clusterRadiusThreshold: CGFloat = 40.0,
@@ -153,43 +160,56 @@ public struct SolarClusterScatterView<
             return
         }
 
-        let localBinding = self.binding
         let radius = clusterRadiusThreshold
         let boundsY = binding.yBounds()
 
-        // Offload clustering to background thread supporting both Numeric and Categorical (String/Date) XValues
-        let (calculatedNodes, sortedHeatmap) = await Task.detached(priority: .userInitiated) { () -> ([ClusterNode], [ClusterNode]) in
-            let allNums = localBinding.data.map { localBinding.extractX(from: $0).asPlotValue }
-            let minVal = allNums.min() ?? 0.0
-            let maxVal = allNums.max() ?? 1.0
-            let span = maxVal - minVal
-
-            let distinctX = Array(Set(localBinding.data.map { localBinding.extractX(from: $0) }))
-            let points = localBinding.data.enumerated().map { (idx, item) -> (id: String, point: CGPoint, weight: Double) in
-                let rawX = localBinding.extractX(from: item)
-                let normX: Double
-                let numX = rawX.asPlotValue
-                if span > 0 {
-                    normX = (numX - minVal) / span
-                } else {
-                    normX = 0.5
-                }
-
-                let normY = localBinding.normalizeY(value: localBinding.extractY(from: item), in: boundsY)
-                let posX = 30 + CGFloat(normX) * (size.width - 60)
-                let posY = size.height - 30 - CGFloat(normY) * (size.height - 60)
-                return (id: String(describing: item.id), point: CGPoint(x: posX, y: posY), weight: 1.0)
-            }
-            let resNodes = ClusterNodeCalculator.cluster(points: points, thresholdRadius: radius)
-            let resHeatmap = Array(resNodes.sorted(by: { $0.count > $1.count }).prefix(250))
-            return (resNodes, resHeatmap)
-        }.value
+        let (calculatedNodes, sortedHeatmap) = await computeClustersOffMainThread(
+            binding: binding,
+            radius: radius,
+            boundsY: boundsY,
+            size: size
+        )
+        if Task.isCancelled { return }
 
         await SolarVizLayoutCache.shared.setClusterNodes(calculatedNodes, forKey: cacheKey)
         withAnimation(SolarVizAnimation.clusterMerge) {
             self.nodes = calculatedNodes
             self.heatmapNodes = sortedHeatmap
         }
+    }
+
+
+    nonisolated private func computeClustersOffMainThread(
+        binding: VizDataBinding<Item, XValue, YValue>,
+        radius: CGFloat,
+        boundsY: (min: YValue, max: YValue),
+        size: CGSize
+    ) async -> ([ClusterNode], [ClusterNode]) {
+        if Task.isCancelled { return ([], []) }
+        
+        let allNums = binding.data.map { binding.extractX(from: $0).asPlotValue }
+        let minVal = allNums.min() ?? 0.0
+        let maxVal = allNums.max() ?? 1.0
+        let span = maxVal - minVal
+
+        let points = binding.data.enumerated().map { (idx, item) -> (id: String, point: CGPoint, weight: Double) in
+            let rawX = binding.extractX(from: item)
+            let normX: Double
+            let numX = rawX.asPlotValue
+            if span > 0 {
+                normX = (numX - minVal) / span
+            } else {
+                normX = 0.5
+            }
+
+            let normY = binding.normalizeY(value: binding.extractY(from: item), in: boundsY)
+            let posX = 30 + CGFloat(normX) * (size.width - 60)
+            let posY = size.height - 30 - CGFloat(normY) * (size.height - 60)
+            return (id: String(describing: item.id), point: CGPoint(x: posX, y: posY), weight: 1.0)
+        }
+        let resNodes = ClusterNodeCalculator.cluster(points: points, thresholdRadius: radius)
+        let resHeatmap = Array(resNodes.sorted(by: { $0.count > $1.count }).prefix(250))
+        return (resNodes, resHeatmap)
     }
 }
 

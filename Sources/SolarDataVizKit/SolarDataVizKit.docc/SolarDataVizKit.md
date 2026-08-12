@@ -1,46 +1,33 @@
 # ``SolarDataVizKit``
 
-유려한 모션 애니메이션 기반 다차원 데이터 시각화 엔진 프레임워크입니다.
+유려한 모션 애니메이션 기반 다차원 데이터 시각화 엔진 킷.
 
 ## Overview
 
-**SolarDataVizKit**은 단순한 1차원 차트 그리기를 넘어, 앱 사용자가 자신의 데이터/통계를 보며 몰입하고 즐길 수 있도록 돕는 프리미엄 iOS/macOS 시각화 SDK입니다.
+`SolarDataVizKit`은 단순한 차트 렌더링 프레임워크가 아닙니다.
+복잡한 수학 연산(K-Means 군집화, 교차점 검출, RBF 커널 비선형 추이)을 SwiftUI의 직관적인 선언형 문법과 결합하여, 최고 수준의 인터랙티브 데이터 시각화 경험을 제공합니다.
 
-- **Zero-Intrusion KeyPath 바인딩**: 도메인 모델 변경 없이 KeyPath(`\.date`, `\.amount`)만으로 바인딩.
-- **Swift 6 Strict Concurrency Safe**: `@MainActor` 격리 및 데이터 레이스 차단.
-- **Dark Warm-Tech 디자인 시스템**: 웜 카본 블랙(#0b0a09) 및 프리미엄 글래스모피즘 테마.
-- **CoreHaptics 통합**: 데이터 교차점 및 클러스터 노드 스냅 시 촉각 피드백 발사.
-- **Zero-Overhead Layout Caching**: `SolarVizLayoutCache`를 통해 SwiftUI `body` 재평가 시 0ms 연산 보장.
+기존 데이터 모델을 수정할 필요 없이 100% Zero-Intrusion KeyPath 바인딩을 통해 데이터의 흐름을 엔진에 주입합니다.
 
 ## Topics
 
-### Essentials
-- ``SolarVizDataPoint``
-- ``SolarGroupedVizDataPoint``
-- ``SolarDefaultDataPoint``
-- ``VizDataBinding``
+### Getting Started
 
-### Core Systems
+- <doc:GettingStarted>
+
+### Core Concepts
+
+- ``VizDataBinding``
+- ``SolarPlottable``
 - ``SolarVizTheme``
 - ``SolarVizHaptics``
-- ``SolarVizLayoutCache``
 
-### Comparison Engine
+### Visualization Engines
+
 - ``SolarComparisonChartView``
-- ``IntersectionPathCalculator``
-- ``DeltaTooltipOverlay``
-
-### Clustering Engine
+- ``SolarDualComparisonChartView``
 - ``SolarClusterScatterView``
-- ``ClusterNodeCalculator``
-- ``ClusterNode``
 - ``DensityHeatmapView``
-
-### Hierarchy Engine
 - ``SolarTreeMapView``
-- ``TreeTile``
 - ``SolarSunburstView``
-- ``SunburstArc``
-
-### UIKit Integration
-- ``SolarVizHostingView``
+- ``SolarBayesianTrendView``

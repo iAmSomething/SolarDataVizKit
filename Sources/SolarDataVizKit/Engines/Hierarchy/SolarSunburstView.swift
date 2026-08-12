@@ -95,6 +95,13 @@ public struct SolarSunburstView<
     private let placeholder: () -> Placeholder
     public var onArcSelected: ((Item?) -> Void)?
 
+    /// 선버스트 계층 뷰를 초기화합니다.
+    ///
+    /// - Parameters:
+    ///   - binding: 시각화할 데이터 바인딩 래퍼 (hierarchyKeyPaths가 정의되어 있어야 함)
+    ///   - initialSelectedArcID: 초기 진입 시 선택 상태를 가질 아크 세그먼트의 ID
+    ///   - onArcSelected: 세그먼트 탭 시 원본 Item을 반환하는 콜백 클로저
+    ///   - placeholder: 데이터가 없을 때 렌더링될 뷰
     public init(
         binding: VizDataBinding<Item, XValue, YValue>,
         initialSelectedArcID: String? = nil,
@@ -160,14 +167,20 @@ public struct SolarSunburstView<
         .accessibilityLabel("Concentric Sunburst Donut Chart")
         .accessibilityValue("\(binding.data.count) data elements")
         .task(id: binding.versionToken) {
-            let targetBinding = binding
-            let newArcs = await Task.detached(priority: .userInitiated) {
-                targetBinding.sunburstArcs()
-            }.value
-            withAnimation(SolarVizAnimation.layoutReflow) {
-                self.cachedArcs = newArcs
+            let newArcs = await computeArcsOffMainThread(binding: binding)
+            if !Task.isCancelled {
+                withAnimation(SolarVizAnimation.layoutReflow) {
+                    self.cachedArcs = newArcs
+                }
             }
         }
+    }
+
+    nonisolated func computeArcsOffMainThread(
+        binding: VizDataBinding<Item, XValue, YValue>
+    ) async -> [SunburstArc<Item>] {
+        if Task.isCancelled { return [] }
+        return binding.sunburstArcs()
     }
 
     @ViewBuilder

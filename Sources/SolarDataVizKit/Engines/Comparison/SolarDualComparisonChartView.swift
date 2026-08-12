@@ -27,6 +27,15 @@ public struct SolarDualComparisonChartView<
     private let placeholder: () -> Placeholder
     public var onPointSelected: ((ItemA?, ItemB?) -> Void)?
 
+    /// 서로 다른 두 모델을 비교하는 듀얼 차트를 초기화합니다.
+    ///
+    /// - Parameters:
+    ///   - bindingA: 첫 번째 데이터 바인딩 모델
+    ///   - bindingB: 두 번째 데이터 바인딩 모델 (서로 다른 타입 허용)
+    ///   - labelA: 첫 번째 시리즈 범례 이름
+    ///   - labelB: 두 번째 시리즈 범례 이름
+    ///   - onPointSelected: 터치 제스처 시 X축 값이 동일한 두 아이템을 반환하는 콜백
+    ///   - placeholder: 데이터가 없을 때 표시할 빈 화면 뷰
     public init(
         bindingA: VizDataBinding<ItemA, XValue, YValue>,
         bindingB: VizDataBinding<ItemB, XValue, YValue>,
@@ -212,22 +221,27 @@ public struct SolarDualComparisonChartView<
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Heterogenous Dual Comparison Line Chart, \(labelA) versus \(labelB)")
         .task(id: bindingB.versionToken) {
-            let targetBindingB = bindingB
-            let dict = await Task.detached(priority: .userInitiated) {
-                var map: [String: ItemB] = [:]
-                // Pre-compute O(1) lookup table off the main thread
-                for item in targetBindingB.data {
-                    let key = targetBindingB.extractX(from: item).description
-                    if map[key] == nil {
-                        map[key] = item
-                    }
+            let dict = await groupDualItemsOffMainThread(bindingB: bindingB)
+            if !Task.isCancelled {
+                withAnimation(SolarVizAnimation.dataLoad) {
+                    self.lookupDictB = dict
                 }
-                return map
-            }.value
-            withAnimation(SolarVizAnimation.dataLoad) {
-                self.lookupDictB = dict
             }
         }
+    }
+
+    nonisolated func groupDualItemsOffMainThread(
+        bindingB: VizDataBinding<ItemB, XValue, YValue>
+    ) async -> [String: ItemB] {
+        if Task.isCancelled { return [:] }
+        var map: [String: ItemB] = [:]
+        for item in bindingB.data {
+            let key = bindingB.extractX(from: item).description
+            if map[key] == nil {
+                map[key] = item
+            }
+        }
+        return map
     }
 }
 

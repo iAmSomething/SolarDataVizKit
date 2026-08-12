@@ -94,36 +94,122 @@
 
 ---
 
-## 💻 빠른 시작 (Quick Start)
+## 💻 실무 연동 가이드 (Integration Guide)
 
-### 1. Swift Package Manager 설치
-```swift
-dependencies: [
-    .package(url: "https://github.com/SolarKits/SolarDataVizKit.git", from: "4.0.0")
-]
-```
+`SolarDataVizKit`의 시각화 엔진은 모델(데이터)을 변경하지 않고 **"어떤 속성(KeyPath)을 그릴 것인가?"**만 엔진에 전달(Binding)하는 방식으로 설계되었습니다.
 
-### 2. SwiftUI 사용 예시
+### 1. 심장부: `VizDataBinding`과 `SolarPlottable`
+
+이 프레임워크의 모든 차트는 `VizDataBinding` 객체를 통해 구동됩니다.
+`SolarPlottable` 프로토콜을 통해 `Double`뿐만 아니라 `Int`, `CGFloat`, `Date`, `String`(카테고리형) 타입의 데이터를 $O(1)$ 복잡도로 자동 변환(Scaling)합니다. 
+
 ```swift
-import SwiftUI
 import SolarDataVizKit
 
-struct SalesComparisonView: View {
-    let binding = VizDataBinding(
-        data: mySalesData,
-        x: \.month,
-        y: \.revenue,
-        group: \.year
-    )
+// 1. 기존 도메인 모델을 그대로 유지 (단, Identifiable 권장)
+struct ServerLog: Identifiable {
+    let id = UUID()
+    let timestamp: Date      // Date 타입도 자동 스케일링
+    let responseTime: Double
+    let endpoint: String     // String은 카테고리로 자동 분리
+}
 
-    var body: some View {
-        SolarComparisonChartView(
-            binding: binding,
-            seriesA: "2026 Sales",
-            seriesB: "2025 Sales"
-        )
-        .solarVizTheme(.darkCarbon)
-        .frame(height: 300)
+// 2. 엔진에 넘겨줄 바인딩 객체 생성
+let binding = VizDataBinding(
+    data: myLogs,
+    x: \.timestamp,         // X축: 시간
+    y: \.responseTime,      // Y축: 응답속도
+    group: \.endpoint       // 그룹: 엔드포인트별 분리
+)
+```
+
+### 2. 12대 시각화 엔진 API 스니펫 (Copy & Paste)
+
+생성한 `binding`을 원하는 뷰에 주입하기만 하면 애니메이션, 캐싱, 레이아웃이 자동으로 처리됩니다.
+
+#### 📊 Grouped Comparison Engine (비교형)
+```swift
+// 다중 라인/막대 비교 차트 (ex: 2개년 매출 비교)
+SolarComparisonChartView(binding: binding, seriesA: "2026", seriesB: "2025")
+
+// 독립 듀얼 색상 비교 (각 계열이 고유한 Y축 스케일을 가짐)
+SolarDualComparisonChartView(binding: binding, leftLabel: "온도", rightLabel: "습도")
+
+// 교차 영역 필 차트 (두 데이터 간의 델타 시각화)
+SolarAreaIntersectionChartView(binding: binding)
+```
+
+#### 🫧 Clustering & Density Engine (군집/밀도형)
+```swift
+// 2D 산점도 버블 차트 (크기와 색상이 Z값으로 자동 계산)
+SolarScatterBubbleView(binding: binding, z: \.volume)
+
+// K-Means 유체 스프링 군집화 (점들이 겹치면 '+N' 뱃지로 융합)
+SolarClusterScatterView(binding: binding, clusterRadius: 40.0)
+
+// 가우시안 2D 블러 히트맵 (밀도 기반 열화상)
+SolarDensityHeatmapView(binding: binding)
+```
+
+#### 🧩 Hierarchy Engine (계층형)
+계층형 데이터를 시각화할 때는 `group` KeyPath를 계층 깊이로 자동 분할합니다.
+```swift
+// Squarified 트리맵 (사각형 타일링)
+SolarTreeMapView(binding: binding)
+
+// 동심원 부채꼴 링 차트 (Sunburst)
+SolarSunburstView(binding: binding)
+```
+
+#### 📈 Bayesian Regression Engine (통계/추이형)
+```swift
+// 노이즈가 많은 데이터에 RBF 커널 기반 비선형 추이선 및 오차범위(밴드) 렌더링
+SolarBayesianTrendView(binding: binding, uncertaintyConfidence: 0.95)
+```
+
+---
+
+## 🎨 커스터마이징 및 모디파이어 (Modifiers & Callbacks)
+
+`SolarDataVizKit`은 뷰를 꾸미거나 유저 인터랙션을 처리할 수 있는 다양한 SwiftUI 스타일의 모디파이어를 제공합니다.
+
+### 1. 인터랙션 콜백 (Callbacks)
+차트의 특정 노드, 타일, 아크 등을 탭했을 때 원본 데이터를 받아옵니다.
+
+```swift
+SolarTreeMapView(binding: binding)
+    .onTileSelected { item in
+        print("선택된 데이터: \(item)")
+    }
+
+SolarClusterScatterView(binding: binding)
+    .onPointSelected { item in
+        // item은 사용자가 정의한 도메인 모델(예: ServerLog)
+    }
+    .onClusterSelected { nodes in
+        print("\(nodes.count)개의 병합된 노드 탭됨")
+    }
+```
+
+### 2. 테마 및 환경 설정 (Environment)
+프리미엄 웜톤(Warm-Tech) 디자인을 기본으로 하며, 햅틱 피드백을 제어할 수 있습니다.
+
+```swift
+SolarComparisonChartView(binding: binding, seriesA: "A", seriesB: "B")
+    .solarVizTheme(.darkCarbon)       // 다크 카본 테마 (Default)
+    .solarVizTheme(.lightPaper)       // 라이트 페이퍼 테마
+    .solarVizHapticsEnabled(true)     // 교차점 스크러빙 시 CoreHaptics 활성화 (Default: true)
+```
+
+### 3. Placeholder API (데이터가 없을 때)
+데이터 배열이 비어있을 때 빈 화면이 뜨는 것을 막고 자연스러운 로딩 UI를 구성할 수 있습니다.
+
+```swift
+SolarSunburstView(binding: VizDataBinding(data: [], x: \.val, y: \.val)) {
+    VStack {
+        ProgressView()
+        Text("데이터를 분석하는 중...")
+            .foregroundColor(.gray)
     }
 }
 ```

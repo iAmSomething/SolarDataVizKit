@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// SwiftUI의 빈번한 body 재평가 시 차트 수식을 0ms 만에 재사용하기 위한 레이아웃 캐시 클래스입니다.
 ///
@@ -37,6 +40,14 @@ public actor SolarVizLayoutCache: Sendable {
     private init() {
         clusterCache.countLimit = 50
         intersectionCache.countLimit = 50
+
+        #if os(iOS) || os(tvOS)
+        Task {
+            for await _ in NotificationCenter.default.notifications(named: UIApplication.didReceiveMemoryWarningNotification) {
+                await self.clearAll()
+            }
+        }
+        #endif
     }
 
     /// 군집화 연산 결과를 캐시에서 조회합니다.

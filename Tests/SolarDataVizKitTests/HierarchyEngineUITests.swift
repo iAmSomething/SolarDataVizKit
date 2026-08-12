@@ -24,11 +24,14 @@ final class HierarchyEngineUITests: XCTestCase {
             y: \.amount
         )
 
-        let treeMapView = SolarTreeMapView(binding: binding)
+        let treeMapView = SolarTreeMapView(binding: binding).frame(width: 500, height: 500)
         
-        // Use ViewInspector to verify actual rendering of the GeometryReader
-        let geo = try treeMapView.inspect().geometryReader()
+        let geo = try treeMapView.inspect().find(ViewType.GeometryReader.self)
         XCTAssertNotNil(geo, "SolarTreeMapView must render a GeometryReader")
+        
+        // At initial render, tiles array is empty (async computation pending), so it should show the placeholder.
+        // We verify that the structure is solid.
+        XCTAssertNoThrow(try geo.find(ViewType.Group.self))
     }
 
     @MainActor
@@ -50,9 +53,9 @@ final class HierarchyEngineUITests: XCTestCase {
             y: \.val
         )
 
-        let sunburstView = SolarSunburstView(binding: binding)
+        let sunburstView = SolarSunburstView(binding: binding).frame(width: 500, height: 500)
         
-        let geo = try sunburstView.inspect().geometryReader()
+        let geo = try sunburstView.inspect().find(ViewType.GeometryReader.self)
         XCTAssertNotNil(geo, "SolarSunburstView must render a GeometryReader")
     }
 

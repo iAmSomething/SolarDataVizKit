@@ -146,21 +146,32 @@ public struct SolarBayesianTrendView<Item: Identifiable & Sendable, XValue: Sola
             )
         }
         .task(id: binding.versionToken) {
-            let localBinding = self.binding
-            let localStrategy = self.strategy
-            let calculated = await Task.detached(priority: .userInitiated) { () -> [BayesianTrendPoint] in
-                let rawPoints = localBinding.data.map { item -> CGPoint in
-                    let x = Double(localBinding.extractX(from: item))
-                    let y = Double(localBinding.extractY(from: item))
-                    return CGPoint(x: x, y: y)
-                }
-                return localStrategy.computeTrend(points: rawPoints, sampleCount: 80)
-            }.value
-            self.trendPoints = calculated
+            let calculated = await calculateTrendOffMainThread(
+                binding: binding,
+                strategy: strategy
+            )
+            if !Task.isCancelled {
+                self.trendPoints = calculated
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Bayesian Trend and Uncertainty Plot")
         .accessibilityValue("\(binding.data.count) observation points")
+    }
+
+
+
+    nonisolated private func calculateTrendOffMainThread(
+        binding: VizDataBinding<Item, XValue, YValue>,
+        strategy: any TrendCalculationStrategy
+    ) async -> [BayesianTrendPoint] {
+        if Task.isCancelled { return [] }
+        let rawPoints = binding.data.map { item -> CGPoint in
+            let x = Double(binding.extractX(from: item))
+            let y = Double(binding.extractY(from: item))
+            return CGPoint(x: x, y: y)
+        }
+        return strategy.computeTrend(points: rawPoints, sampleCount: 80)
     }
 
     @ChartContentBuilder
