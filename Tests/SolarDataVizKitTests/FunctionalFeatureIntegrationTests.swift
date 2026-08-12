@@ -55,7 +55,7 @@ final class FunctionalFeatureIntegrationTests: XCTestCase {
             ProductionEdgeItem(id: "2", xLabel: "B", yValue: 40.0, category: "C", subCategory: "S")
         ]
 
-        let binding = VizDataBinding(data: items, x: \.xLabel, y: \.yValue)
+        let _ = VizDataBinding(data: items, x: \.xLabel, y: \.yValue)
         let bounds = CGRect(x: 0, y: 0, width: 200, height: 100)
 
         let squarifiedTiles = SquarifiedTreemapStrategy().computeTiles(

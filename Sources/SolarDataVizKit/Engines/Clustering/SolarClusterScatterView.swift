@@ -18,51 +18,69 @@ import SwiftUI
 /// ```
 public struct SolarClusterScatterView<
     Item: Identifiable & Sendable,
-    XValue: Hashable & Sendable,
-    YValue: BinaryFloatingPoint & Sendable
+    XValue: SolarPlottable,
+    YValue: BinaryFloatingPoint & Sendable,
+    Placeholder: View
 >: View {
     public let binding: VizDataBinding<Item, XValue, YValue>
     public let clusterRadiusThreshold: CGFloat
 
     @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
+    @Environment(\.solarVizHapticsEnabled) private var hapticsEnabled
     @State private var previousClusterCount: Int = 0
     @State private var nodes: [ClusterNode] = []
     @State private var heatmapNodes: [ClusterNode] = []
+    
+    private let placeholder: () -> Placeholder
+    public var onNodeSelected: (([Item]) -> Void)?
 
     public init(
         binding: VizDataBinding<Item, XValue, YValue>,
-        clusterRadiusThreshold: CGFloat = 40.0
+        clusterRadiusThreshold: CGFloat = 40.0,
+        onNodeSelected: (([Item]) -> Void)? = nil,
+        @ViewBuilder placeholder: @escaping () -> Placeholder
     ) {
         self.binding = binding
         self.clusterRadiusThreshold = clusterRadiusThreshold
+        self.onNodeSelected = onNodeSelected
+        self.placeholder = placeholder
     }
 
     public var body: some View {
         let theme = environmentTheme
 
         GeometryReader { geometry in
-            let size = geometry.size
+            Group {
+                if geometry.size.width > 10 && geometry.size.height > 10 {
+                    if nodes.isEmpty {
+                        placeholder()
+                            .frame(width: geometry.size.width, height: geometry.size.height)
+                    } else {
+                        ZStack {
+                            // Density Heatmap Layer (Single-pass Canvas rasterization with 0 body sorting)
+                            DensityHeatmapView(nodes: heatmapNodes)
 
-            ZStack {
-                // Density Heatmap Layer (Single-pass Canvas rasterization with 0 body sorting)
-                DensityHeatmapView(nodes: heatmapNodes)
-
-                // Cluster Nodes Layer
-                ForEach(nodes) { node in
-                    clusterNodeView(node: node, theme: theme)
+                            // Cluster Nodes Layer
+                            ForEach(nodes) { node in
+                                clusterNodeView(node: node, theme: theme)
+                            }
+                        }
+                    }
                 }
             }
             .animation(.spring(response: 0.4, dampingFraction: 0.7), value: nodes)
             .onChange(of: nodes.count) { newCount in
                 if previousClusterCount != 0 && previousClusterCount != newCount {
                     Task { @MainActor in
+                    if hapticsEnabled {
                         SolarVizHaptics.shared.playClusterSnap()
+                    }
                     }
                 }
                 previousClusterCount = newCount
             }
-            .task(id: "\(binding.dataHash)_\(clusterRadiusThreshold)_\(size.width)x\(size.height)") {
-                await updateClustersOffMainThread(size: size)
+            .task(id: "\(binding.versionToken)_\(clusterRadiusThreshold)_\(geometry.size.width)x\(geometry.size.height)") {
+                await updateClustersOffMainThread(size: geometry.size)
             }
         }
         .background(
@@ -107,13 +125,29 @@ public struct SolarClusterScatterView<
                     .foregroundColor(theme.primaryTextColor)
             }
         }
+        .accessibilityLabel("Cluster")
+        .accessibilityValue("\(count) items")
+        .frame(width: radius * 2, height: radius * 2)
         .position(node.center)
+        .onTapGesture {
+            // Reconstruct items from bindings
+            let items = binding.data.filter { item in
+                let nodeIDs = node.childIDs
+                return nodeIDs.contains(String(describing: item.id))
+            }
+            onNodeSelected?(items)
+            Task { @MainActor in
+                if hapticsEnabled {
+                    SolarVizHaptics.shared.playSelection()
+                }
+            }
+        }
     }
 
     private func updateClustersOffMainThread(size: CGSize) async {
         guard size.width > 0, size.height > 0 else { return }
 
-        let cacheKey = "cluster_\(binding.dataHash)_\(clusterRadiusThreshold)_\(Int(size.width))x\(Int(size.height))"
+        let cacheKey = "cluster_\(binding.versionToken)_\(clusterRadiusThreshold)_\(Int(size.width))x\(Int(size.height))"
         if let cached = await SolarVizLayoutCache.shared.getClusterNodes(forKey: cacheKey) {
             self.nodes = cached
             return
@@ -125,7 +159,7 @@ public struct SolarClusterScatterView<
 
         // Offload clustering to background thread supporting both Numeric and Categorical (String/Date) XValues
         let (calculatedNodes, sortedHeatmap) = await Task.detached(priority: .userInitiated) { () -> ([ClusterNode], [ClusterNode]) in
-            let allNums = localBinding.data.compactMap { Double(String(describing: localBinding.extractX(from: $0))) }
+            let allNums = localBinding.data.map { localBinding.extractX(from: $0).asPlotValue }
             let minVal = allNums.min() ?? 0.0
             let maxVal = allNums.max() ?? 1.0
             let span = maxVal - minVal
@@ -134,13 +168,11 @@ public struct SolarClusterScatterView<
             let points = localBinding.data.enumerated().map { (idx, item) -> (id: String, point: CGPoint, weight: Double) in
                 let rawX = localBinding.extractX(from: item)
                 let normX: Double
-
-                if let numX = Double(String(describing: rawX)) {
-                    normX = span > 0 ? (numX - minVal) / span : 0.5
+                let numX = rawX.asPlotValue
+                if span > 0 {
+                    normX = (numX - minVal) / span
                 } else {
-                    let catIdx = distinctX.firstIndex(of: rawX) ?? 0
-                    let count = max(distinctX.count, 1)
-                    normX = count > 1 ? Double(catIdx) / Double(count - 1) : 0.5
+                    normX = 0.5
                 }
 
                 let normY = localBinding.normalizeY(value: localBinding.extractY(from: item), in: boundsY)
@@ -154,9 +186,20 @@ public struct SolarClusterScatterView<
         }.value
 
         await SolarVizLayoutCache.shared.setClusterNodes(calculatedNodes, forKey: cacheKey)
-        withAnimation(.easeOut(duration: 0.3)) {
+        withAnimation(SolarVizAnimation.clusterMerge) {
             self.nodes = calculatedNodes
             self.heatmapNodes = sortedHeatmap
         }
+    }
+}
+
+// MARK: - Backward Compatibility Init
+extension SolarClusterScatterView where Placeholder == EmptyView {
+    public init(
+        binding: VizDataBinding<Item, XValue, YValue>,
+        clusterRadiusThreshold: CGFloat = 40.0,
+        onNodeSelected: (([Item]) -> Void)? = nil
+    ) {
+        self.init(binding: binding, clusterRadiusThreshold: clusterRadiusThreshold, onNodeSelected: onNodeSelected, placeholder: { EmptyView() })
     }
 }

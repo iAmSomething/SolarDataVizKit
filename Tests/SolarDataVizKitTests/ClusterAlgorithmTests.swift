@@ -43,4 +43,21 @@ final class ClusterAlgorithmTests: XCTestCase {
         XCTAssertEqual(clusters.count, 3)
         XCTAssertTrue(clusters.allSatisfy { !$0.isMerged })
     }
+
+    func testTaskCancellationDefense() async {
+        let points: [(id: String, point: CGPoint, weight: Double)] = (0..<1000).map { i in
+            (id: "p\(i)", point: CGPoint(x: Double.random(in: 0...1000), y: Double.random(in: 0...1000)), weight: 1.0)
+        }
+        
+        let task = Task.detached {
+            return ClusterNodeCalculator.cluster(points: points, thresholdRadius: 10.0)
+        }
+        
+        // Immediately cancel the task
+        task.cancel()
+        
+        let result = await task.value
+        // If cancellation is caught early in the engine, it should return empty array []
+        XCTAssertEqual(result.count, 0, "Cancelled cluster calculation should return an empty array")
+    }
 }

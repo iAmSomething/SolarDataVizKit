@@ -34,6 +34,55 @@ public struct BayesianTrendPoint: Sendable, Identifiable, Hashable {
     }
 }
 
+/// 추이 계산 전략의 공통 인터페이스입니다. (Strategy Pattern / Dependency Injection)
+///
+/// ## Overview
+/// 기본 구현체인 `BayesianRBFKernelStrategy` 외에,
+/// 커스텀 알고리즘(선형 회귀, LOESS, 스무딩 스플라인 등)을 주입하여 추이 시각화를 교체할 수 있습니다.
+///
+/// ## Example
+/// ```swift
+/// struct LinearTrendStrategy: TrendCalculationStrategy {
+///     func computeTrend(points: [CGPoint], sampleCount: Int) -> [BayesianTrendPoint] {
+///         // ... 선형 회귀 구현
+///     }
+/// }
+/// SolarBayesianTrendView(binding: binding, strategy: LinearTrendStrategy())
+/// ```
+public protocol TrendCalculationStrategy: Sendable {
+    /// 입력 관측 포인트를 바탕으로 추이 곡선과 불확실성 범위를 계산합니다.
+    ///
+    /// - Parameters:
+    ///   - points: 원시 (x, y) 관측 데이터 포인트 배열
+    ///   - sampleCount: 출력 곡선의 샘플링 해상도 (기본값: 80)
+    /// - Returns: 계산된 추이 포인트 배열
+    func computeTrend(points: [CGPoint], sampleCount: Int) -> [BayesianTrendPoint]
+}
+
+/// 가우시안 프로세스 RBF 커널 기반 비선형 베이지안 추이 전략 (vDSP Hardware Accelerated 기본 구현체)
+///
+/// ## Overview
+/// `BayesianTrendCalculator`의 vDSP 하드웨어 가속 엔진을 `TrendCalculationStrategy` 프로토콜로 래핑합니다.
+/// `SolarBayesianTrendView`의 기본 전략(default parameter)으로 사용됩니다.
+public struct BayesianRBFKernelStrategy: TrendCalculationStrategy {
+    /// 노이즈 분산 하한. 데이터에 잡음이 없을 경우에도 최소 불확실성 구간을 보장합니다.
+    public let noiseVariance: Double
+
+    /// 새 RBF 커널 전략을 초기화합니다.
+    /// - Parameter noiseVariance: 관측 노이즈 분산 (기본값: 0.05)
+    public init(noiseVariance: Double = 0.05) {
+        self.noiseVariance = noiseVariance
+    }
+
+    public func computeTrend(points: [CGPoint], sampleCount: Int) -> [BayesianTrendPoint] {
+        BayesianTrendCalculator.computeTrend(
+            points: points,
+            sampleCount: sampleCount,
+            noiseVariance: noiseVariance
+        )
+    }
+}
+
 /// 가우시안 프로세스(Gaussian Process RBF Kernel) 기반 비선형 베이지안 수치해석 수학 엔진입니다. (vDSP SIMD Hardware Accelerated)
 public struct BayesianTrendCalculator: Sendable {
     /// 입력 관측 포인트를 바탕으로 비선형 곡선 사후 추이 및 95% 불확실성 오차 범위를 계산합니다.

@@ -21,13 +21,15 @@ import Charts
 /// ```
 public struct SolarComparisonChartView<
     Item: Identifiable & Sendable,
-    XValue: Hashable & Sendable & CustomStringConvertible,
-    YValue: BinaryFloatingPoint & Sendable
+    XValue: SolarPlottable,
+    YValue: BinaryFloatingPoint & Sendable,
+    Placeholder: View
 >: View {
     public let binding: VizDataBinding<Item, XValue, YValue>
     public let seriesA: String
     public let seriesB: String
     @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
+    @Environment(\.solarVizHapticsEnabled) private var hapticsEnabled
     @State private var selectedIndex: Int?
     @State private var previousCrossIndex: Int?
     @State private var sortedGroups: [(key: String, items: [Item])]
@@ -42,13 +44,18 @@ public struct SolarComparisonChartView<
 
     public let initialSelectedIndex: Int?
     public let showIntersectionRegions: Bool
+    
+    private let placeholder: () -> Placeholder
+    public var onPointSelected: ((Item?, Item?) -> Void)?
 
     public init(
         binding: VizDataBinding<Item, XValue, YValue>,
         seriesA: String = "Series A",
         seriesB: String = "Series B",
         initialSelectedIndex: Int? = nil,
-        showIntersectionRegions: Bool = false
+        showIntersectionRegions: Bool = false,
+        onPointSelected: ((Item?, Item?) -> Void)? = nil,
+        @ViewBuilder placeholder: @escaping () -> Placeholder
     ) {
         self.binding = binding
         self.seriesA = seriesA
@@ -57,19 +64,25 @@ public struct SolarComparisonChartView<
         self.showIntersectionRegions = showIntersectionRegions
         self._selectedIndex = State(initialValue: initialSelectedIndex)
         self._sortedGroups = State(initialValue: [])
+        self.onPointSelected = onPointSelected
+        self.placeholder = placeholder
     }
     public var body: some View {
         let theme = environmentTheme
-
         GeometryReader { geometry in
-            let containerWidth = max(geometry.size.width, 1.0)
-
-            VStack(alignment: .leading, spacing: 12) {
+            if geometry.size.width > 10 && geometry.size.height > 10 {
+                let containerWidth = max(geometry.size.width, 1.0)
+                
+                if sortedGroups.isEmpty {
+                    placeholder()
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                } else {
+                    VStack(alignment: .leading, spacing: 12) {
                 // Header Legend
                 HStack(spacing: 16) {
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(theme.seriesColors.first ?? theme.accentColor)
+                            .fill(theme.colorForSeries(at: 0, totalCount: 2))
                             .frame(width: 8, height: 8)
                         Text(seriesA)
                             .font(.system(size: 12, weight: .semibold))
@@ -78,7 +91,7 @@ public struct SolarComparisonChartView<
 
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(theme.seriesColors.dropFirst().first ?? Color.blue)
+                            .fill(theme.colorForSeries(at: 1, totalCount: 2))
                             .frame(width: 8, height: 8)
                         Text(seriesB)
                             .font(.system(size: 12, weight: .semibold))
@@ -89,8 +102,8 @@ public struct SolarComparisonChartView<
 
                 // Main Chart Canvas
                 ZStack(alignment: .topLeading) {
-                    let colorA = theme.seriesColors.first ?? theme.accentColor
-                    let colorB = theme.seriesColors.dropFirst().first ?? Color(red: 56/255, green: 189/255, blue: 248/255)
+                    let colorA = theme.colorForSeries(at: 0, totalCount: 2)
+                    let colorB = theme.colorForSeries(at: 1, totalCount: 2)
                     let itemsA = activeItemsA
                     let itemsB = activeItemsB
 
@@ -172,6 +185,7 @@ public struct SolarComparisonChartView<
                             guard value.location.x >= 0 && value.location.x <= containerWidth && value.location.y >= 0 && value.location.y <= geometry.size.height else {
                                 if selectedIndex != nil {
                                     selectedIndex = nil
+                                    onPointSelected?(nil, nil)
                                 }
                                 return
                             }
@@ -182,18 +196,26 @@ public struct SolarComparisonChartView<
 
                             if selectedIndex != index {
                                 selectedIndex = index
+                                let itemA = index < activeItemsA.count ? activeItemsA[index] : nil
+                                let itemB = index < activeItemsB.count ? activeItemsB[index] : nil
+                                onPointSelected?(itemA, itemB)
                                 Task { @MainActor in
+                                if hapticsEnabled {
                                     SolarVizHaptics.shared.playSelection()
+                                }
                                 }
                                 checkIntersectionHaptic(at: index)
                             }
                         }
                         .onEnded { _ in
-                            withAnimation(.easeOut(duration: 0.2)) {
+                            withAnimation(SolarVizAnimation.tooltip) {
                                 selectedIndex = nil
+                                onPointSelected?(nil, nil)
                             }
                         }
                 )
+                }
+                }
             }
         }
         .accessibilityElement(children: .contain)
@@ -202,12 +224,12 @@ public struct SolarComparisonChartView<
         .onChange(of: initialSelectedIndex) { newValue in
             selectedIndex = newValue
         }
-        .task(id: binding.dataHash) {
+        .task(id: binding.versionToken) {
             let targetBinding = binding
             let newGroups = await Task.detached(priority: .userInitiated) {
                 targetBinding.sortedGroupedData()
             }.value
-            withAnimation(.easeOut(duration: 0.3)) {
+            withAnimation(SolarVizAnimation.dataLoad) {
                 self.sortedGroups = newGroups
             }
         }
@@ -245,7 +267,9 @@ public struct SolarComparisonChartView<
             if previousCrossIndex != index {
                 previousCrossIndex = index
                 Task { @MainActor in
+                if hapticsEnabled {
                     SolarVizHaptics.shared.playImpact(style: .medium)
+                }
                 }
             }
         }
@@ -263,5 +287,27 @@ public struct SolarComparisonChartView<
             .foregroundStyle(by: .value("Series", seriesName))
             .lineStyle(StrokeStyle(lineWidth: isDashed ? 2 : 3, dash: isDashed ? [4, 4] : []))
         }
+    }
+}
+
+// MARK: - Backward Compatibility Init
+extension SolarComparisonChartView where Placeholder == EmptyView {
+    public init(
+        binding: VizDataBinding<Item, XValue, YValue>,
+        seriesA: String = "Series A",
+        seriesB: String = "Series B",
+        initialSelectedIndex: Int? = nil,
+        showIntersectionRegions: Bool = false,
+        onPointSelected: ((Item?, Item?) -> Void)? = nil
+    ) {
+        self.init(
+            binding: binding,
+            seriesA: seriesA,
+            seriesB: seriesB,
+            initialSelectedIndex: initialSelectedIndex,
+            showIntersectionRegions: showIntersectionRegions,
+            onPointSelected: onPointSelected,
+            placeholder: { EmptyView() }
+        )
     }
 }

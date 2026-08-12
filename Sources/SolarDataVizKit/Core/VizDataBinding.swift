@@ -23,7 +23,7 @@ import SwiftUI
 /// `@unchecked Sendable`을 통해 스레드 세이프티를 완벽히 보장합니다.
 public struct VizDataBinding<
     Item: Identifiable & Sendable,
-    XValue: Hashable & Sendable,
+    XValue: SolarPlottable,
     YValue: BinaryFloatingPoint & Sendable
 >: @unchecked Sendable {
     /// 시각화할 데이터 모델 배열입니다.
@@ -36,15 +36,10 @@ public struct VizDataBinding<
     public let groupKeyPath: KeyPath<Item, String>?
     /// 다단계 계층구조 식별용 KeyPath 배열입니다 (선택사항).
     public let hierarchyKeyPaths: [KeyPath<Item, String>]
+    /// 데이터 바인딩 객체의 고유 버전 토큰 (O(1) 갱신 감지용)
+    public let versionToken: UUID
 
     /// KeyPath 바인딩 래퍼를 초기화합니다.
-    ///
-    /// - Parameters:
-    ///   - data: 입력 데이터 모델 배열
-    ///   - x: X축 바인딩 KeyPath
-    ///   - y: Y축 바인딩 KeyPath
-    ///   - group: 시리즈 그룹 바인딩 KeyPath (기본값: nil)
-    ///   - hierarchy: 다중 계층 바인딩 KeyPath 배열 (기본값: 빈 배열)
     public init(
         data: [Item],
         x: KeyPath<Item, XValue>,
@@ -57,22 +52,12 @@ public struct VizDataBinding<
         self.yKeyPath = y
         self.groupKeyPath = group
         self.hierarchyKeyPaths = hierarchy.isEmpty ? (group != nil ? [group!] : []) : hierarchy
+        self.versionToken = UUID()
     }
 
-    /// 데이터 배열의 개수, 첫/끝/중간 요소 식별자 및 Y수치를 포함한 빠른 64-bit 데이터 해시값을 반환합니다.
+    /// 데이터 바인딩 객체의 빠른 64-bit 해시값을 반환합니다. (하위 호환성 유지)
     public var dataHash: Int {
-        var hasher = Hasher()
-        hasher.combine(data.count)
-        if !data.isEmpty {
-            hasher.combine(data.first?.id)
-            hasher.combine(data.last?.id)
-            let midIndex = data.count / 2
-            hasher.combine(data[midIndex].id)
-            hasher.combine(Double(extractY(from: data[midIndex])))
-            hasher.combine(Double(extractY(from: data.first!)))
-            hasher.combine(Double(extractY(from: data.last!)))
-        }
-        return hasher.finalize()
+        versionToken.hashValue
     }
 
     /// 특정 데이터 항목에서 X축 값을 추출합니다.

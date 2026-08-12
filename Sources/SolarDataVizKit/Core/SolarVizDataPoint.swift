@@ -1,4 +1,22 @@
 import Foundation
+import CoreGraphics
+
+/// 차트 축에 매핑될 수 있는 데이터의 자격 요건을 정의합니다. (Swift 6 Strict Concurrency Sendable 준수)
+public protocol SolarPlottable: Hashable, Sendable, CustomStringConvertible {
+    /// 수학 엔진이 계산할 수 있는 Double 형태의 수치로 변환합니다.
+    var asPlotValue: Double { get }
+}
+
+extension Int: SolarPlottable { public var asPlotValue: Double { Double(self) } }
+extension Double: SolarPlottable { public var asPlotValue: Double { self } }
+extension Float: SolarPlottable { public var asPlotValue: Double { Double(self) } }
+extension CGFloat: SolarPlottable { public var asPlotValue: Double { Double(self) } }
+extension Date: SolarPlottable { public var asPlotValue: Double { self.timeIntervalSince1970 } }
+extension String: SolarPlottable {
+    public var asPlotValue: Double {
+        Double(self) ?? Double(abs(self.hashValue) % 10_000)
+    }
+}
 
 /// SolarDataVizKit의 모든 시각화 엔진에서 다루는 코어 데이터 포인트 프로토콜입니다.
 ///

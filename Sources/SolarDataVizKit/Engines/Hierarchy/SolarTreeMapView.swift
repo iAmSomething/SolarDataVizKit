@@ -13,36 +13,55 @@ import SwiftUI
 /// ```
 public struct SolarTreeMapView<
     Item: Identifiable & Sendable,
-    XValue: Hashable & Sendable,
-    YValue: BinaryFloatingPoint & Sendable
+    XValue: SolarPlottable,
+    YValue: BinaryFloatingPoint & Sendable,
+    Placeholder: View
 >: View {
     public let binding: VizDataBinding<Item, XValue, YValue>
     public let strategy: any TreemapLayoutStrategy
 
     @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
+    @Environment(\.solarVizHapticsEnabled) private var hapticsEnabled
     @State private var selectedTileID: String?
     @State private var tiles: [TreeTile<Item>] = []
+    
+    private let placeholder: () -> Placeholder
+    public var onTileSelected: ((Item?) -> Void)?
 
     public init(
         binding: VizDataBinding<Item, XValue, YValue>,
         strategy: any TreemapLayoutStrategy = SquarifiedTreemapStrategy(),
-        initialSelectedTileID: String? = nil
+        initialSelectedTileID: String? = nil,
+        onTileSelected: ((Item?) -> Void)? = nil,
+        @ViewBuilder placeholder: @escaping () -> Placeholder
     ) {
         self.binding = binding
         self.strategy = strategy
         self._selectedTileID = State(initialValue: initialSelectedTileID)
+        self.onTileSelected = onTileSelected
+        self.placeholder = placeholder
     }
 
     public var body: some View {
         let theme = environmentTheme
 
         GeometryReader { geometry in
-            ZStack(alignment: .topLeading) {
-                ForEach(Array(tiles.enumerated()), id: \.element.id) { index, tile in
-                    tileView(tile: tile, index: index, theme: theme)
+            Group {
+                if geometry.size.width > 10 && geometry.size.height > 10 {
+                    if tiles.isEmpty {
+                        placeholder()
+                            .frame(width: geometry.size.width, height: geometry.size.height)
+                    } else {
+                        ZStack(alignment: .topLeading) {
+                            ForEach(Array(tiles.enumerated()), id: \.element.id) { index, tile in
+                                tileView(tile: tile, index: index, theme: theme)
+                            }
+                        }
+                    }
                 }
             }
-            .task(id: "\(binding.dataHash)_\(geometry.size.width)x\(geometry.size.height)") {
+            .task(id: "\(binding.versionToken)_\(geometry.size.width)x\(geometry.size.height)") {
+                guard geometry.size.width > 10, geometry.size.height > 10 else { return }
                 let rect = CGRect(origin: .zero, size: geometry.size)
                 let localBinding = binding
                 let localStrategy = strategy
@@ -56,7 +75,7 @@ public struct SolarTreeMapView<
                     )
                 }.value
                 
-                withAnimation(.easeOut(duration: 0.3)) {
+                withAnimation(SolarVizAnimation.layoutReflow) {
                     self.tiles = newTiles
                 }
             }
@@ -78,8 +97,7 @@ public struct SolarTreeMapView<
     @ViewBuilder
     private func tileView(tile: TreeTile<Item>, index: Int, theme: SolarVizTheme) -> some View {
         let isSelected = selectedTileID == tile.id
-        let colors = theme.seriesColors
-        let color = !colors.isEmpty ? colors[index % colors.count] : theme.accentColor
+        let color = theme.colorForSeries(at: index, totalCount: tiles.count)
 
         let titleText = String(describing: binding.extractX(from: tile.item))
         let pctText = String(format: "%.1f%%", tile.percentage)
@@ -96,19 +114,23 @@ public struct SolarTreeMapView<
                     .fill(color.opacity(0.75))
             }
 
-            VStack(spacing: 4) {
-                Text(titleText)
-                    .font(.system(size: max(10, min(tile.rect.width * 0.12, 14)), weight: .bold))
-                    .foregroundColor(theme.primaryTextColor)
-                    .lineLimit(1)
+            if tileW > 40 && tileH > 30 {
+                VStack(spacing: 4) {
+                    Text(titleText)
+                        .font(.system(size: max(10, min(tile.rect.width * 0.12, 14)), weight: .bold))
+                        .foregroundColor(theme.primaryTextColor)
+                        .lineLimit(1)
 
-                Text(pctText)
-                    .font(.system(size: max(9, min(tile.rect.width * 0.1, 12)), weight: .semibold, design: .rounded))
-                    .foregroundColor(theme.primaryTextColor.opacity(0.85))
-                    .lineLimit(1)
+                    Text(pctText)
+                        .font(.system(size: max(9, min(tile.rect.width * 0.1, 12)), weight: .semibold, design: .rounded))
+                        .foregroundColor(theme.primaryTextColor.opacity(0.85))
+                        .lineLimit(1)
+                }
+                .padding(4)
             }
-            .padding(4)
         }
+        .accessibilityLabel(titleText)
+        .accessibilityValue(String(describing: binding.extractY(from: tile.item)))
         .frame(width: tileW, height: tileH)
         .position(x: tile.rect.midX, y: tile.rect.midY)
         .overlay(
@@ -123,14 +145,30 @@ public struct SolarTreeMapView<
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])
         .accessibilityHint("Double tap to toggle selection highlight")
         .onTapGesture {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                selectedTileID = isSelected ? nil : tile.id
+            withAnimation(SolarVizAnimation.selection) {
+                let newID = isSelected ? nil : tile.id
+                selectedTileID = newID
+                onTileSelected?(isSelected ? nil : tile.item)
             }
             Task { @MainActor in
-                SolarVizHaptics.shared.playSelection()
+                if hapticsEnabled {
+                    SolarVizHaptics.shared.playSelection()
+                }
             }
         }
     }
 
 
+}
+
+// MARK: - Backward Compatibility Init
+extension SolarTreeMapView where Placeholder == EmptyView {
+    public init(
+        binding: VizDataBinding<Item, XValue, YValue>,
+        strategy: any TreemapLayoutStrategy = SquarifiedTreemapStrategy(),
+        initialSelectedTileID: String? = nil,
+        onTileSelected: ((Item?) -> Void)? = nil
+    ) {
+        self.init(binding: binding, strategy: strategy, initialSelectedTileID: initialSelectedTileID, onTileSelected: onTileSelected, placeholder: { EmptyView() })
+    }
 }

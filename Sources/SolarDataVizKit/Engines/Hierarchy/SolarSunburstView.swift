@@ -81,36 +81,50 @@ public struct SunburstArc<Item: Identifiable & Sendable>: Identifiable, Sendable
 /// `SolarSunburstView`는 1차 대분류 및 2차 소분류 계층 구조를 동심원 부채꼴 링으로 확장하여 시각화하는 뷰 컴포넌트입니다.
 public struct SolarSunburstView<
     Item: Identifiable & Sendable,
-    XValue: Hashable & Sendable & CustomStringConvertible,
-    YValue: BinaryFloatingPoint & Sendable
+    XValue: SolarPlottable,
+    YValue: BinaryFloatingPoint & Sendable,
+    Placeholder: View
 >: View {
     public let binding: VizDataBinding<Item, XValue, YValue>
 
     @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
+    @Environment(\.solarVizHapticsEnabled) private var hapticsEnabled
     @State private var selectedArcID: String?
     @State private var cachedArcs: [SunburstArc<Item>]
 
+    private let placeholder: () -> Placeholder
+    public var onArcSelected: ((Item?) -> Void)?
+
     public init(
         binding: VizDataBinding<Item, XValue, YValue>,
-        initialSelectedArcID: String? = nil
+        initialSelectedArcID: String? = nil,
+        onArcSelected: ((Item?) -> Void)? = nil,
+        @ViewBuilder placeholder: @escaping () -> Placeholder
     ) {
         self.binding = binding
         self._selectedArcID = State(initialValue: initialSelectedArcID)
         self._cachedArcs = State(initialValue: [])
+        self.onArcSelected = onArcSelected
+        self.placeholder = placeholder
     }
 
     public var body: some View {
         let theme = environmentTheme
 
         GeometryReader { geometry in
-            let center = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
-            let maxRadius = min(geometry.size.width, geometry.size.height) / 2
-            let arcs = cachedArcs
+            if geometry.size.width > 10 && geometry.size.height > 10 {
+                if cachedArcs.isEmpty {
+                    placeholder()
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                } else {
+                    let center = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
+                    let maxRadius = min(geometry.size.width, geometry.size.height) / 2
+                    let arcs = cachedArcs
 
-            ZStack {
-                ForEach(arcs) { arc in
-                    arcView(arc: arc, center: center, maxRadius: maxRadius, theme: theme)
-                }
+                    ZStack {
+                        ForEach(arcs) { arc in
+                            arcView(arc: arc, center: center, maxRadius: maxRadius, theme: theme)
+                        }
 
                 // Center Label
                 VStack(spacing: 2) {
@@ -130,6 +144,8 @@ public struct SolarSunburstView<
                             .foregroundColor(theme.primaryTextColor)
                     }
                 }
+                }
+                }
             }
         }
         .background(
@@ -143,12 +159,12 @@ public struct SolarSunburstView<
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Concentric Sunburst Donut Chart")
         .accessibilityValue("\(binding.data.count) data elements")
-        .task(id: binding.dataHash) {
+        .task(id: binding.versionToken) {
             let targetBinding = binding
             let newArcs = await Task.detached(priority: .userInitiated) {
                 targetBinding.sunburstArcs()
             }.value
-            withAnimation(.easeOut(duration: 0.3)) {
+            withAnimation(SolarVizAnimation.layoutReflow) {
                 self.cachedArcs = newArcs
             }
         }
@@ -157,7 +173,8 @@ public struct SolarSunburstView<
     @ViewBuilder
     private func arcView(arc: SunburstArc<Item>, center: CGPoint, maxRadius: CGFloat, theme: SolarVizTheme) -> some View {
         let isSelected = selectedArcID == arc.id
-        let baseColor = !theme.seriesColors.isEmpty ? theme.seriesColors[arc.groupIndex % theme.seriesColors.count] : theme.accentColor
+        let totalGroups = Set(cachedArcs.map { $0.groupIndex }).count
+        let baseColor = theme.colorForSeries(at: arc.groupIndex, totalCount: totalGroups)
         let color = arc.isChild ? baseColor.opacity(0.60 + 0.12 * Double(arc.childIndex % 3)) : baseColor
 
         let innerR = arc.innerRadius(maxRadius: maxRadius)
@@ -203,13 +220,28 @@ public struct SolarSunburstView<
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])
         .accessibilityHint("Double tap to highlight segment")
         .onTapGesture {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                selectedArcID = isSelected ? nil : arc.id
+            withAnimation(SolarVizAnimation.selection) {
+                let newID = isSelected ? nil : arc.id
+                selectedArcID = newID
+                onArcSelected?(isSelected ? nil : arc.item)
             }
             Task { @MainActor in
-                SolarVizHaptics.shared.playSelection()
+                if hapticsEnabled {
+                    SolarVizHaptics.shared.playSelection()
+                }
             }
         }
+    }
+}
+
+// MARK: - Backward Compatibility Init
+extension SolarSunburstView where Placeholder == EmptyView {
+    public init(
+        binding: VizDataBinding<Item, XValue, YValue>,
+        initialSelectedArcID: String? = nil,
+        onArcSelected: ((Item?) -> Void)? = nil
+    ) {
+        self.init(binding: binding, initialSelectedArcID: initialSelectedArcID, onArcSelected: onArcSelected, placeholder: { EmptyView() })
     }
 }
 

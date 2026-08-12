@@ -6,14 +6,16 @@ import Charts
 public struct SolarDualComparisonChartView<
     ItemA: Identifiable & Sendable,
     ItemB: Identifiable & Sendable,
-    XValue: Hashable & Sendable & CustomStringConvertible,
-    YValue: BinaryFloatingPoint & Sendable
+    XValue: SolarPlottable,
+    YValue: BinaryFloatingPoint & Sendable,
+    Placeholder: View
 >: View {
     public let bindingA: VizDataBinding<ItemA, XValue, YValue>
     public let bindingB: VizDataBinding<ItemB, XValue, YValue>
     public let labelA: String
     public let labelB: String
     @Environment(\.solarVizTheme) private var environmentTheme: SolarVizTheme
+    @Environment(\.solarVizHapticsEnabled) private var hapticsEnabled
     @State private var selectedIndex: Int?
     @State private var lookupDictB: [String: ItemB] = [:]
 
@@ -22,30 +24,42 @@ public struct SolarDualComparisonChartView<
         return lookupDictB[xKey]
     }
 
+    private let placeholder: () -> Placeholder
+    public var onPointSelected: ((ItemA?, ItemB?) -> Void)?
+
     public init(
         bindingA: VizDataBinding<ItemA, XValue, YValue>,
         bindingB: VizDataBinding<ItemB, XValue, YValue>,
         labelA: String = "Series A",
-        labelB: String = "Series B"
+        labelB: String = "Series B",
+        onPointSelected: ((ItemA?, ItemB?) -> Void)? = nil,
+        @ViewBuilder placeholder: @escaping () -> Placeholder
     ) {
         self.bindingA = bindingA
         self.bindingB = bindingB
         self.labelA = labelA
         self.labelB = labelB
+        self.onPointSelected = onPointSelected
+        self.placeholder = placeholder
     }
 
     public var body: some View {
         let theme = environmentTheme
 
         GeometryReader { geometry in
-            let containerWidth = max(geometry.size.width, 1.0)
-
-            VStack(alignment: .leading, spacing: 12) {
+            if geometry.size.width > 10 && geometry.size.height > 10 {
+                let containerWidth = max(geometry.size.width, 1.0)
+                
+                if bindingA.data.isEmpty && bindingB.data.isEmpty {
+                    placeholder()
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                } else {
+                    VStack(alignment: .leading, spacing: 12) {
                 // Header Legend
                 HStack(spacing: 16) {
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(theme.seriesColors.first ?? theme.accentColor)
+                            .fill(theme.colorForSeries(at: 0, totalCount: 2))
                             .frame(width: 8, height: 8)
                         Text(labelA)
                             .font(.system(size: 12, weight: .semibold))
@@ -54,7 +68,7 @@ public struct SolarDualComparisonChartView<
 
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(theme.seriesColors.dropFirst().first ?? Color.blue)
+                            .fill(theme.colorForSeries(at: 1, totalCount: 2))
                             .frame(width: 8, height: 8)
                         Text(labelB)
                             .font(.system(size: 12, weight: .semibold))
@@ -99,8 +113,8 @@ public struct SolarDualComparisonChartView<
                         }
                     }
                     .chartForegroundStyleScale([
-                        labelA: theme.seriesColors.first ?? theme.accentColor,
-                        labelB: theme.seriesColors.dropFirst().first ?? Color.blue
+                        labelA: theme.colorForSeries(at: 0, totalCount: 2),
+                        labelB: theme.colorForSeries(at: 1, totalCount: 2)
                     ])
                     .chartLegend(.hidden)
                     .chartYAxis {
@@ -161,7 +175,10 @@ public struct SolarDualComparisonChartView<
                     DragGesture(minimumDistance: 0)
                         .onChanged { value in
                             guard value.location.x >= 0 && value.location.x <= containerWidth && value.location.y >= 0 && value.location.y <= geometry.size.height else {
-                                if selectedIndex != nil { selectedIndex = nil }
+                                if selectedIndex != nil { 
+                                    selectedIndex = nil 
+                                    onPointSelected?(nil, nil)
+                                }
                                 return
                             }
 
@@ -171,22 +188,30 @@ public struct SolarDualComparisonChartView<
 
                             if selectedIndex != index {
                                 selectedIndex = index
+                                let itemA = index < bindingA.data.count ? bindingA.data[index] : nil
+                                let itemB = itemA.flatMap { findMatchingItemB(for: bindingA.extractX(from: $0).description) }
+                                onPointSelected?(itemA, itemB)
                                 Task { @MainActor in
+                                if hapticsEnabled {
                                     SolarVizHaptics.shared.playSelection()
+                                }
                                 }
                             }
                         }
                         .onEnded { _ in
-                            withAnimation(.easeOut(duration: 0.2)) {
+                            withAnimation(SolarVizAnimation.tooltip) {
                                 selectedIndex = nil
+                                onPointSelected?(nil, nil)
                             }
                         }
                 )
+                }
+                }
             }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Heterogenous Dual Comparison Line Chart, \(labelA) versus \(labelB)")
-        .task(id: bindingB.dataHash) {
+        .task(id: bindingB.versionToken) {
             let targetBindingB = bindingB
             let dict = await Task.detached(priority: .userInitiated) {
                 var map: [String: ItemB] = [:]
@@ -199,9 +224,22 @@ public struct SolarDualComparisonChartView<
                 }
                 return map
             }.value
-            withAnimation(.easeOut(duration: 0.3)) {
+            withAnimation(SolarVizAnimation.dataLoad) {
                 self.lookupDictB = dict
             }
         }
+    }
+}
+
+// MARK: - Backward Compatibility Init
+extension SolarDualComparisonChartView where Placeholder == EmptyView {
+    public init(
+        bindingA: VizDataBinding<ItemA, XValue, YValue>,
+        bindingB: VizDataBinding<ItemB, XValue, YValue>,
+        labelA: String = "Series A",
+        labelB: String = "Series B",
+        onPointSelected: ((ItemA?, ItemB?) -> Void)? = nil
+    ) {
+        self.init(bindingA: bindingA, bindingB: bindingB, labelA: labelA, labelB: labelB, onPointSelected: onPointSelected, placeholder: { EmptyView() })
     }
 }

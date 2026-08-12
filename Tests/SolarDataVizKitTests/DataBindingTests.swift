@@ -69,4 +69,21 @@ final class DataBindingTests: XCTestCase {
         XCTAssertEqual(dp.value, 42.0)
         XCTAssertEqual(dp.groupIdentifier, "2026")
     }
+
+    func testNormalizeYZeroDivisionDefense() {
+        let items = [
+            TestItem(id: 1, month: "Jan", amount: 100.0, category: "Sales"),
+            TestItem(id: 2, month: "Feb", amount: 100.0, category: "Sales")
+        ]
+        
+        let binding = VizDataBinding(
+            data: items,
+            x: \.month,
+            y: \.amount
+        )
+        
+        // Even if bounds.max == bounds.min artificially, normalizeY must not crash or return NaN/Infinity
+        let norm = binding.normalizeY(value: 100.0, in: (min: 100.0, max: 100.0))
+        XCTAssertEqual(norm, 0.5, "When variance is zero, normalizeY must default to 0.5 center placement to avoid zero-division Infinity/NaN")
+    }
 }

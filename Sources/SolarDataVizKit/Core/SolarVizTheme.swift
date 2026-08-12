@@ -75,6 +75,22 @@ public struct SolarVizTheme: Sendable, Hashable {
     }
 }
 
+extension SolarVizTheme {
+    /// 시리즈 인덱스에 대응하는 색상을 반환합니다.
+    /// seriesColors 배열에 충분한 색상이 없으면 HSL 균등분할로 자동 생성합니다.
+    public func colorForSeries(at index: Int, totalCount: Int) -> Color {
+        guard !seriesColors.isEmpty else { return accentColor }
+        
+        if index < seriesColors.count {
+            return seriesColors[index]
+        }
+        
+        // HSL 균등분할 자동 생성
+        let hue = Double(index) / Double(max(totalCount, 1))
+        return Color(hue: hue, saturation: 0.65, brightness: 0.85)
+    }
+}
+
 // MARK: - Built-in Presets
 extension SolarVizTheme {
     /// Dark Warm-Tech 기본 웜 카본 블랙 테마입니다. (#0b0a09, #f5f4f2, #ff6b00)
